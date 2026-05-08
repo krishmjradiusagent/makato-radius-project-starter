@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { motion } from 'motion/react';
 import { useTheme } from 'next-themes';
 import { ChevronRight, ChevronDown, ChevronLeft, Plus, MessageSquare, Bell, Activity as ActivityIcon, StickyNote, Building2, Briefcase, Mail, Phone, MapPin, Archive, FileTextIcon, Sparkles, Sun, Moon, PhoneCall, MessageCircle, Smartphone, RefreshCw, Clock, Ban, X } from 'lucide-react';
 import { DSButton, DSBadge } from './ds';
@@ -197,27 +198,35 @@ export function ThreePanelClientProfile() {
 
               {/* CTA — always visible */}
               <div className="relative px-4 pb-3">
-                <button
+                <motion.button
                   onClick={handleGenerateMel}
                   disabled={melGenerating}
-                  className="relative w-full overflow-hidden rounded-full text-white disabled:opacity-50 h-9 flex items-center justify-between px-3 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 hover:from-slate-800 hover:via-indigo-900 hover:to-slate-800 border border-blue-200/40 ring-1 ring-blue-300/35 ring-offset-1 ring-offset-background shadow-sm shadow-blue-950/10 transition-all"
+                  whileHover="hover"
+                  initial="initial"
+                  className="relative w-full overflow-hidden rounded-md text-white disabled:opacity-50 h-9 flex items-center justify-between px-3 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 hover:from-slate-800 hover:via-indigo-900 hover:to-slate-800 border border-violet-500/35 transition-all"
                 >
                   <AuroraBars
                     barCount={60}
-                    speed={3}
-                    blur={10}
+                    speed={2.1}
+                    blur={12}
                     background="transparent"
-                    colors={["#1e3a8a", "#3b82f6", "#4338ca", "#6366f1", "#4f46e5", "#3730a3"]}
+                    colors={["#3730a3", "#4c1d95", "#1e40af", "#4338ca", "#2d1b69", "#5b21b6"]}
                   />
-                  {/* Content */}
+                  {/* Shine sweep */}
+                  <motion.div
+                    className="absolute inset-0 w-full h-full pointer-events-none"
+                    style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent)" }}
+                    variants={{ initial: { x: "-100%" }, hover: { x: "100%" } }}
+                    transition={{ duration: 0.55, ease: "easeInOut" }}
+                  />
                   <span className="relative flex items-center gap-2 text-sm font-semibold">
-                    <InfIcon className="h-4 w-4 text-blue-200" />
+                    <InfIcon className="h-4 w-4 text-violet-300" />
                     {melGenerating ? 'Generating…' : 'Summarise Violet'}
                   </span>
-                  <span className="relative flex items-center gap-0.5 rounded-full bg-white/12 border border-white/15 px-2 py-0.5 text-[10px] font-semibold text-white/90">
+                  <span className="relative flex items-center gap-0.5 rounded-full bg-white/10 border border-white/20 px-2 py-0.5 text-[10px] font-semibold text-white/70">
                     <span>⌘</span><span>S</span>
                   </span>
-                </button>
+                </motion.button>
               </div>
 
               {/* Collapsible body */}
