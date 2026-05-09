@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { useTheme } from 'next-themes';
-import { ChevronRight, ChevronDown, ChevronLeft, Plus, MessageSquare, Bell, Activity as ActivityIcon, StickyNote, Building2, Briefcase, Mail, Phone, MapPin, Archive, FileTextIcon, Sparkles, Sun, Moon, PhoneCall, MessageCircle, Smartphone, RefreshCw, Clock, Ban, X } from 'lucide-react';
+import { ChevronRight, ChevronDown, ChevronLeft, Plus, MessageSquare, Bell, Activity as ActivityIcon, StickyNote, Building2, Briefcase, Mail, Phone, MapPin, Archive, FileTextIcon, Sparkles, Sun, Moon, PhoneCall, MessageCircle, Smartphone, RefreshCw, Clock, Ban, X, Pencil, Trash2, MoreVertical, Send } from 'lucide-react';
 import { DSButton, DSBadge } from './ds';
 import { cn } from './ui/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
@@ -25,6 +25,14 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from './ui/collap
 import { Separator } from './ui/separator';
 import { FlipButton } from './ui/flip-button';
 import { AuroraBars } from './ui/aurora-bars';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './ui/alert-dialog';
+import { AddFamilyMemberDialog } from './client-profile/AddFamilyMemberDialog';
+import { AddCollaboratorDialog } from './client-profile/AddCollaboratorDialog';
+import { BRBCCard } from './client-profile/BRBCCard';
+import type { FamilyMemberDraft } from './client-profile/AddFamilyMemberDialog';
+import type { CollaboratorDraft } from './client-profile/AddCollaboratorDialog';
+import type { BRBCAgreementData } from './client-profile/BRBCCard';
 import imgAvatar from "figma:asset/425014815828544c6be381aa86661be1b4dad5c3.png";
 
 function InfIcon({ className }: { className?: string }) {
@@ -80,6 +88,44 @@ export function ThreePanelClientProfile() {
   const [melGenerating, setMelGenerating] = useState(false);
   const [expandedPast, setExpandedPast] = useState<number | null>(null);
   const [melOpen, setMelOpen] = useState(true);
+
+  // Contact data
+  const contactEmails = [
+    { id: 'e1', value: 'violet.cole@email.com', label: 'Primary' },
+    { id: 'e2', value: 'v.cole@techsolutions.com', label: 'Work' },
+    { id: 'e3', value: 'violet.cole.backup@email.com', label: 'Personal' },
+  ];
+  const contactPhones = [
+    { id: 'p1', value: '(555) 123-4567', label: 'Mobile' },
+    { id: 'p2', value: '(555) 987-6543', label: 'Work' },
+  ];
+
+  // Family members state
+  const [familyMembers, setFamilyMembers] = useState([
+    { id: 'fm1', name: 'Smith Zeglaya', relationship: 'Spouse', phone: '(818) 888-1234', email: 'smith.z@email.com', initials: 'SZ', color: 'from-pink-400 to-violet-400' },
+    { id: 'fm2', name: 'Emma Cole', relationship: 'Child', phone: '', email: 'emma.cole@email.com', initials: 'EC', color: 'from-sky-400 to-blue-500' },
+  ]);
+  const [showAddFamily, setShowAddFamily] = useState(false);
+  const [deleteFamilyTarget, setDeleteFamilyTarget] = useState<{ id: string; name: string } | null>(null);
+
+  // Collaborators state
+  const [collaborators, setCollaborators] = useState([
+    { id: 'c1', name: 'Monica Miller', role: 'Co-agent', access: 'Full access', initials: 'MM', color: 'from-pink-400 to-violet-400', isInvited: false },
+    { id: 'c2', name: 'David Chen', role: 'T.C.', access: 'Default level access', initials: 'DC', color: 'from-sky-400 to-blue-500', isInvited: false },
+    { id: 'c3', name: 'Sarah Wilson', role: 'Lender', access: 'View only', initials: 'SW', color: 'from-emerald-400 to-teal-500', isInvited: true },
+  ]);
+  const [showAddCollaborator, setShowAddCollaborator] = useState(false);
+  const [removeCollabTarget, setRemoveCollabTarget] = useState<{ id: string; name: string } | null>(null);
+
+  // BRBC
+  const [brbcAgreement] = useState<BRBCAgreementData>({
+    status: 'agent_signature_pending',
+    createdDate: 'May 1, 2026',
+    recipients: [
+      { name: 'You (Agent)', role: 'Agent', email: 'agent@radius.com', initials: 'AG', signingStatus: 'pending' },
+      { name: 'Violet Cole', role: 'Buyer', email: 'violet.cole@email.com', initials: 'VC', signingStatus: 'signed' },
+    ],
+  });
 
   const pastSummaries = [
     { date: 'Oct 12, 2025', preview: 'Client app activity reviewed. No new transaction movement.', full: 'Violet\'s client app showed last activity on Oct 12, 2025. No new transaction movement detected. Relationship and contact details remain unchanged.' },
@@ -319,25 +365,76 @@ export function ThreePanelClientProfile() {
           <Accordion type="single" collapsible defaultValue="contact">
             <AccordionItem value="contact" className="border-none">
               <AccordionTrigger className="px-4 py-0 min-h-12 text-sm font-medium text-muted-foreground hover:no-underline hover:text-foreground border-b border-border">
-                Contact
+                <span className="flex items-center gap-2">
+                  Contact
+                  <DSBadge variant="secondary" className="h-4 px-1.5 rounded-full text-[10px]">{contactEmails.length + contactPhones.length + 1}</DSBadge>
+                </span>
               </AccordionTrigger>
               <AccordionContent className="pb-0">
-                {[
-                  { icon: Mail, primary: 'violet.cole@email.com', secondary: '+2 emails' },
-                  { icon: Phone, primary: '(555) 123-4567', secondary: '+1 phone' },
-                  { icon: MapPin, primary: '123 Mission Street, Palo Alto, CA 54323', secondary: null },
-                ].map(({ icon: Icon, primary, secondary }, i, arr) => (
-                  <div key={i}>
-                    <div className="flex items-center gap-3 min-h-12 px-4 py-0">
-                      <Icon className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs leading-tight text-foreground">{primary}</p>
-                        {secondary && <p className="text-[11px] mt-0.5 text-muted-foreground">{secondary}</p>}
+                {/* Emails */}
+                {contactEmails.map((email, i) => (
+                  <div key={email.id}>
+                    <div className="group flex items-center gap-3 min-h-10 px-4 py-1.5">
+                      <Mail className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                      <p className="text-xs leading-tight text-foreground flex-1 truncate">{email.value}</p>
+                      <DSBadge variant="outline" className="text-[10px] h-4 px-1 border-border text-muted-foreground shrink-0">{email.label}</DSBadge>
+                      <div className="flex opacity-0 group-hover:opacity-100 transition-opacity gap-0.5 ml-1">
+                        <button className={`p-1 rounded ${isDark ? 'hover:bg-[#3d3d3d]' : 'hover:bg-gray-100'}`}><Pencil className="h-3 w-3 text-muted-foreground" /></button>
+                        <button className={`p-1 rounded ${isDark ? 'hover:bg-[#3d3d3d]' : 'hover:bg-gray-100'}`}><Trash2 className="h-3 w-3 text-muted-foreground" /></button>
+                      </div>
+                      <div className="sm:hidden">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild><button className="p-1 rounded"><MoreVertical className="h-3.5 w-3.5 text-muted-foreground" /></button></DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-28">
+                            <DropdownMenuItem><Pencil className="h-3.5 w-3.5 mr-2" />Edit</DropdownMenuItem>
+                            <DropdownMenuItem className="text-destructive focus:text-destructive"><Trash2 className="h-3.5 w-3.5 mr-2" />Delete</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </div>
-                    {i < arr.length - 1 && <div className="h-px border-b border-border mx-4" />}
+                    {i < contactEmails.length - 1 && <div className="h-px border-b border-border mx-4" />}
                   </div>
                 ))}
+                <div className="h-px border-b border-border" />
+                {/* Phones */}
+                {contactPhones.map((phone, i) => (
+                  <div key={phone.id}>
+                    <div className="group flex items-center gap-3 min-h-10 px-4 py-1.5">
+                      <Phone className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                      <p className="text-xs leading-tight text-foreground flex-1 truncate">{phone.value}</p>
+                      <DSBadge variant="outline" className="text-[10px] h-4 px-1 border-border text-muted-foreground shrink-0">{phone.label}</DSBadge>
+                      <div className="flex opacity-0 group-hover:opacity-100 transition-opacity gap-0.5 ml-1">
+                        <button className={`p-1 rounded ${isDark ? 'hover:bg-[#3d3d3d]' : 'hover:bg-gray-100'}`}><Pencil className="h-3 w-3 text-muted-foreground" /></button>
+                        <button className={`p-1 rounded ${isDark ? 'hover:bg-[#3d3d3d]' : 'hover:bg-gray-100'}`}><Trash2 className="h-3 w-3 text-muted-foreground" /></button>
+                      </div>
+                      <div className="sm:hidden">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild><button className="p-1 rounded"><MoreVertical className="h-3.5 w-3.5 text-muted-foreground" /></button></DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-28">
+                            <DropdownMenuItem><Pencil className="h-3.5 w-3.5 mr-2" />Edit</DropdownMenuItem>
+                            <DropdownMenuItem className="text-destructive focus:text-destructive"><Trash2 className="h-3.5 w-3.5 mr-2" />Delete</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
+                    {i < contactPhones.length - 1 && <div className="h-px border-b border-border mx-4" />}
+                  </div>
+                ))}
+                <div className="h-px border-b border-border" />
+                {/* Address */}
+                <div className="group flex items-start gap-3 min-h-10 px-4 py-2">
+                  <MapPin className="h-4 w-4 flex-shrink-0 text-muted-foreground mt-0.5" />
+                  <p className="text-xs leading-tight text-foreground flex-1">123 Mission Street, Palo Alto, CA 54323</p>
+                  <div className="flex opacity-0 group-hover:opacity-100 transition-opacity gap-0.5 mt-0.5">
+                    <button className={`p-1 rounded ${isDark ? 'hover:bg-[#3d3d3d]' : 'hover:bg-gray-100'}`}><Pencil className="h-3 w-3 text-muted-foreground" /></button>
+                  </div>
+                </div>
+                {/* Add link */}
+                <div className="px-4 py-2 border-b border-border">
+                  <button className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                    <Plus className="h-3 w-3" /> Add contact detail
+                  </button>
+                </div>
               </AccordionContent>
             </AccordionItem>
           </Accordion>
@@ -385,6 +482,104 @@ export function ThreePanelClientProfile() {
             </AccordionItem>
           </Accordion>
 
+          {/* Family Members */}
+          <Accordion type="single" collapsible>
+            <AccordionItem value="family" className="border-none">
+              <AccordionTrigger className="px-4 py-0 min-h-12 text-sm font-medium text-muted-foreground hover:no-underline hover:text-foreground border-b border-border">
+                <span className="flex items-center gap-2 flex-1">
+                  Family Members
+                  {familyMembers.length > 0 && <DSBadge variant="secondary" className="h-4 w-4 rounded-full p-0 flex items-center justify-center text-[10px]">{familyMembers.length}</DSBadge>}
+                  <span className="ml-auto flex items-center gap-1 mr-1">
+                    <span role="button" tabIndex={0} onClick={e => { e.stopPropagation(); }} onKeyDown={e => e.key==='Enter'&&e.stopPropagation()} className={`p-1 rounded cursor-pointer ${isDark ? 'hover:bg-[#3d3d3d]' : 'hover:bg-gray-100'}`} title="Send app invite"><Send className="h-3.5 w-3.5 text-muted-foreground" /></span>
+                    <span role="button" tabIndex={0} onClick={e => { e.stopPropagation(); setShowAddFamily(true); }} onKeyDown={e => e.key==='Enter'&&(e.stopPropagation(),setShowAddFamily(true))} className={`p-1 rounded cursor-pointer ${isDark ? 'hover:bg-[#3d3d3d]' : 'hover:bg-gray-100'}`}><Plus className="h-3.5 w-3.5 text-muted-foreground" /></span>
+                  </span>
+                </span>
+              </AccordionTrigger>
+              <AccordionContent className="border-b border-border pb-0">
+                {familyMembers.length === 0 ? (
+                  <p className="text-xs px-4 py-2.5 text-muted-foreground">No family members added.</p>
+                ) : familyMembers.map((m, i) => (
+                  <div key={m.id}>
+                    <div className="group flex items-center gap-3 min-h-12 px-4 py-1.5">
+                      <Avatar className="h-7 w-7 shrink-0">
+                        <AvatarFallback className={`text-[10px] font-semibold bg-gradient-to-br ${m.color} text-white`}>{m.initials}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-xs font-medium text-foreground">{m.name}</p>
+                          <DSBadge variant="outline" className="text-[10px] h-4 px-1 border-border text-muted-foreground">{m.relationship}</DSBadge>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">{m.phone || m.email}</p>
+                      </div>
+                      <div className="hidden sm:flex opacity-0 group-hover:opacity-100 transition-opacity gap-0.5">
+                        <button className={`p-1 rounded ${isDark ? 'hover:bg-[#3d3d3d]' : 'hover:bg-gray-100'}`}><Pencil className="h-3 w-3 text-muted-foreground" /></button>
+                        <button onClick={() => setDeleteFamilyTarget({ id: m.id, name: m.name })} className={`p-1 rounded ${isDark ? 'hover:bg-[#3d3d3d]' : 'hover:bg-gray-100'}`}><Trash2 className="h-3 w-3 text-muted-foreground" /></button>
+                      </div>
+                      <div className="sm:hidden">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild><button className="p-1 rounded"><MoreVertical className="h-3.5 w-3.5 text-muted-foreground" /></button></DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-28">
+                            <DropdownMenuItem><Pencil className="h-3.5 w-3.5 mr-2" />Edit</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setDeleteFamilyTarget({ id: m.id, name: m.name })} className="text-destructive focus:text-destructive"><Trash2 className="h-3.5 w-3.5 mr-2" />Remove</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
+                    {i < familyMembers.length - 1 && <div className="h-px border-b border-border mx-4" />}
+                  </div>
+                ))}
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+
+          {/* Collaborators */}
+          <Accordion type="single" collapsible>
+            <AccordionItem value="collaborators" className="border-none">
+              <AccordionTrigger className="px-4 py-0 min-h-12 text-sm font-medium text-muted-foreground hover:no-underline hover:text-foreground border-b border-border">
+                <span className="flex items-center gap-2 flex-1">
+                  Collaborators
+                  {collaborators.length > 0 && <DSBadge variant="secondary" className="h-4 w-4 rounded-full p-0 flex items-center justify-center text-[10px]">{collaborators.length}</DSBadge>}
+                  <span role="button" tabIndex={0} onClick={e => { e.stopPropagation(); setShowAddCollaborator(true); }} onKeyDown={e => e.key==='Enter'&&(e.stopPropagation(),setShowAddCollaborator(true))} className={`ml-auto mr-1 p-1 rounded cursor-pointer ${isDark ? 'hover:bg-[#3d3d3d]' : 'hover:bg-gray-100'}`}><Plus className="h-3.5 w-3.5 text-muted-foreground" /></span>
+                </span>
+              </AccordionTrigger>
+              <AccordionContent className="border-b border-border pb-0">
+                {collaborators.length === 0 ? (
+                  <p className="text-xs px-4 py-2.5 text-muted-foreground">No collaborators added.</p>
+                ) : collaborators.map((c, i) => (
+                  <div key={c.id}>
+                    <div className="group flex items-center gap-3 min-h-12 px-4 py-1.5">
+                      <Avatar className="h-7 w-7 shrink-0">
+                        <AvatarFallback className={`text-[10px] font-semibold bg-gradient-to-br ${c.color} text-white`}>{c.initials}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="text-xs font-medium text-foreground">{c.name}</p>
+                          <DSBadge variant="outline" className="text-[10px] h-4 px-1 border-border text-muted-foreground">{c.role}</DSBadge>
+                          {c.isInvited && <DSBadge variant="outline" className="text-[10px] h-4 px-1 bg-amber-50 text-amber-700 border-amber-200">Invited</DSBadge>}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">{c.access}</p>
+                      </div>
+                      <div className="hidden sm:flex opacity-0 group-hover:opacity-100 transition-opacity gap-0.5">
+                        <button className={`p-1 rounded ${isDark ? 'hover:bg-[#3d3d3d]' : 'hover:bg-gray-100'}`}><Pencil className="h-3 w-3 text-muted-foreground" /></button>
+                        <button onClick={() => setRemoveCollabTarget({ id: c.id, name: c.name })} className={`p-1 rounded ${isDark ? 'hover:bg-[#3d3d3d]' : 'hover:bg-gray-100'}`}><Trash2 className="h-3 w-3 text-muted-foreground" /></button>
+                      </div>
+                      <div className="sm:hidden">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild><button className="p-1 rounded"><MoreVertical className="h-3.5 w-3.5 text-muted-foreground" /></button></DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-28">
+                            <DropdownMenuItem><Pencil className="h-3.5 w-3.5 mr-2" />Edit</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setRemoveCollabTarget({ id: c.id, name: c.name })} className="text-destructive focus:text-destructive"><Trash2 className="h-3.5 w-3.5 mr-2" />Remove</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
+                    {i < collaborators.length - 1 && <div className="h-px border-b border-border mx-4" />}
+                  </div>
+                ))}
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+
           {/* Details / Background / Custom fields / Additional Details */}
           <Accordion type="multiple" className="w-full">
             {[
@@ -399,16 +594,18 @@ export function ThreePanelClientProfile() {
                 ['Home Anniversary','Jun 10, 2015'],
                 ['Company','TechSolutions Inc.'],
                 ['Website','violet.techsolutions.com'],
+                ['Facebook','—'],
+                ['Twitter','—'],
+                ['LinkedIn','—'],
                 ['Attorney','James Parker'],
                 ['First Call Date','JUN 3 2024'],
                 ['Close Date','—'],
                 ['Commission %','3%'],
+                ['Priority Status','High'],
                 ['Last Visit','Jan 12, 2025'],
                 ['Listings Viewed','24'],
                 ['Showing Requests','6'],
                 ['Favorites','8'],
-                ['Emails','violet.cole@email.com, +2'],
-                ['Phones','(555) 123-4567, +1'],
               ]},
             ].map(({ value, label, rows }) => (
               <AccordionItem key={value} value={value} className="border-none">
@@ -481,6 +678,9 @@ export function ThreePanelClientProfile() {
               </button>
             ))}
           </div>
+
+          {/* BRBC */}
+          <BRBCCard agreement={brbcAgreement} isDark={isDark} />
 
           {/* Note Composer */}
           <Card className={`p-4 shadow-sm ${isDark ? 'bg-[#1a1a1a] border-[#2d2d2d]' : 'bg-gradient-to-br from-background via-blue-50/60 to-violet-50/40 border-blue-200/60'}`}>
@@ -620,6 +820,60 @@ export function ThreePanelClientProfile() {
         </div>
       </div>
       </div>
+
+      {/* Dialogs */}
+      <AddFamilyMemberDialog
+        open={showAddFamily}
+        onClose={() => setShowAddFamily(false)}
+        onSave={(draft: FamilyMemberDraft) => {
+          const initials = draft.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+          const colors = ['from-pink-400 to-violet-400', 'from-sky-400 to-blue-500', 'from-emerald-400 to-teal-500', 'from-amber-400 to-orange-500'];
+          const color = colors[familyMembers.length % colors.length];
+          setFamilyMembers(prev => [...prev, {
+            id: `fm${Date.now()}`, name: draft.name, relationship: draft.relationship,
+            phone: draft.phones[0]?.value ?? '', email: draft.emails[0]?.value ?? '',
+            initials, color,
+          }]);
+        }}
+      />
+      <AddCollaboratorDialog
+        open={showAddCollaborator}
+        onClose={() => setShowAddCollaborator(false)}
+        onSave={(draft: CollaboratorDraft) => {
+          const initials = draft.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+          const colors = ['from-violet-400 to-purple-500', 'from-sky-400 to-blue-500', 'from-emerald-400 to-teal-500'];
+          const color = colors[collaborators.length % colors.length];
+          setCollaborators(prev => [...prev, { id: `c${Date.now()}`, name: draft.name, role: draft.role, access: draft.access, initials, color, isInvited: false }]);
+        }}
+      />
+
+      {/* Delete family member */}
+      <AlertDialog open={!!deleteFamilyTarget} onOpenChange={o => !o && setDeleteFamilyTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove family member?</AlertDialogTitle>
+            <AlertDialogDescription>This will permanently remove <strong>{deleteFamilyTarget?.name}</strong>.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteFamilyTarget(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setFamilyMembers(prev => prev.filter(m => m.id !== deleteFamilyTarget?.id)); setDeleteFamilyTarget(null); }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Remove</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Remove collaborator */}
+      <AlertDialog open={!!removeCollabTarget} onOpenChange={o => !o && setRemoveCollabTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove collaborator?</AlertDialogTitle>
+            <AlertDialogDescription>This will remove <strong>{removeCollabTarget?.name}</strong> from Violet's collaborators.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setRemoveCollabTarget(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setCollaborators(prev => prev.filter(c => c.id !== removeCollabTarget?.id)); setRemoveCollabTarget(null); }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Remove</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </SidebarProvider>
   );
 }
