@@ -864,51 +864,59 @@ function DefaultAssignmentSection({
   form,
   errors,
   onFormChange,
+  onApplyDefaultToggle,
 }: {
   form: PlanForm;
   errors: PlanErrors;
   onFormChange: (patch: Partial<PlanForm>) => void;
+  onApplyDefaultToggle: (checked: boolean) => void;
 }) {
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-4">
-        <Label htmlFor="apply-default" className="text-sm font-medium">Assign this plan as default</Label>
+      <p className="text-sm font-semibold leading-5">Assign Defaults</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <Label htmlFor="apply-default" className="text-sm font-medium">Set as default after save</Label>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Applies this plan to selected agents for new CDA calculations.
+          </p>
+        </div>
         <Switch
           id="apply-default"
           checked={form.applyAsDefault}
-          onCheckedChange={(checked) => onFormChange({ applyAsDefault: checked })}
+          onCheckedChange={onApplyDefaultToggle}
         />
       </div>
-      <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between gap-3">
-          <Label className="text-sm font-medium">Assign default to</Label>
-          <Badge variant="secondary">{form.defaultMode === "all" ? "All team members" : "Specific agents"}</Badge>
-        </div>
-        <RadioGroup value={form.defaultMode} onValueChange={(value) => onFormChange({ defaultMode: value as DefaultMode })}>
-          <label className="flex items-start gap-3 rounded-lg border p-3">
-            <RadioGroupItem value="all" />
-            <div className="flex flex-col gap-1">
-              <span className="text-sm font-medium">All team members</span>
+      {form.applyAsDefault && (
+        <RadioGroup
+          value={form.defaultMode}
+          onValueChange={(value) => onFormChange({ defaultMode: value as DefaultMode })}
+          className="flex flex-col gap-2"
+        >
+          <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-3">
+            <RadioGroupItem value="all" className="mt-0.5" />
+            <div className="flex flex-col gap-0.5">
+              <span className="text-sm font-medium leading-5">All team members</span>
               <span className="text-xs text-muted-foreground">
                 This plan will apply to all current team members for new CDA calculations.
               </span>
             </div>
           </label>
-          <label className="flex items-start gap-3 rounded-lg border p-3">
-            <RadioGroupItem value="specific" />
-            <span className="text-sm font-medium">Specific agents</span>
+          <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-3">
+            <RadioGroupItem value="specific" className="mt-0.5" />
+            <span className="text-sm font-medium leading-5">Specific agents</span>
           </label>
         </RadioGroup>
-        {form.defaultMode === "specific" && (
-          <>
-            <AgentSelector
-              selectedAgentIds={form.selectedAgentIds}
-              onChange={(selectedAgentIds) => onFormChange({ selectedAgentIds })}
-            />
-            {errors.selectedAgentIds && <p className="text-xs text-destructive">{errors.selectedAgentIds}</p>}
-          </>
-        )}
-      </div>
+      )}
+      {form.applyAsDefault && form.defaultMode === "specific" && (
+        <>
+          <AgentSelector
+            selectedAgentIds={form.selectedAgentIds}
+            onChange={(selectedAgentIds) => onFormChange({ selectedAgentIds })}
+          />
+          {errors.selectedAgentIds && <p className="text-xs text-destructive">{errors.selectedAgentIds}</p>}
+        </>
+      )}
     </div>
   );
 }
@@ -989,41 +997,31 @@ function AddPlanDialog({
                   onRemoveTier={onRemoveTier}
                 />
               )}
-              <DefaultAssignmentSection form={form} errors={errors} onFormChange={onFormChange} />
             </>
           ) : (
-            <>
-              <PlanSetupFields
-                form={form}
-                errors={errors}
-                feeLabel={feeLabel}
-                splitTotal={splitTotal}
-                onFormChange={onFormChange}
-                onAgentSplitChange={onAgentSplitChange}
-                onTeamSplitChange={onTeamSplitChange}
-                onUpdateTier={onUpdateTier}
-                onAddTier={onAddTier}
-                onRemoveTier={onRemoveTier}
-              />
-              <Separator />
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <Label htmlFor="apply-default" className="text-sm font-medium">Assign this plan as default</Label>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Choose who should use this plan for new CDA calculations.
-                  </p>
-                </div>
-                <Switch
-                  id="apply-default"
-                  checked={form.applyAsDefault}
-                  onCheckedChange={(checked) => {
-                    onFormChange({ applyAsDefault: checked });
-                    if (checked) setPlanSetupExpanded(false);
-                  }}
-                />
-              </div>
-            </>
+            <PlanSetupFields
+              form={form}
+              errors={errors}
+              feeLabel={feeLabel}
+              splitTotal={splitTotal}
+              onFormChange={onFormChange}
+              onAgentSplitChange={onAgentSplitChange}
+              onTeamSplitChange={onTeamSplitChange}
+              onUpdateTier={onUpdateTier}
+              onAddTier={onAddTier}
+              onRemoveTier={onRemoveTier}
+            />
           )}
+          <Separator />
+          <DefaultAssignmentSection
+            form={form}
+            errors={errors}
+            onFormChange={onFormChange}
+            onApplyDefaultToggle={(checked) => {
+              onFormChange({ applyAsDefault: checked });
+              if (checked) setPlanSetupExpanded(false);
+            }}
+          />
         </div>
         <DialogFooter className="!flex !flex-row !items-center !justify-end !gap-3 shrink-0 border-t bg-background px-6 py-4">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
