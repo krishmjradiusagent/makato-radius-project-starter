@@ -95,6 +95,10 @@ import {
 import { Textarea } from "../components/ui/textarea";
 
 import { CDASectionHeader } from "../components/finance/cda-section-header";
+import { UpcomingCharges } from "../components/billingsdk/upcoming-charges";
+import { UsageMeterLinear } from "../components/billingsdk/usage-meter";
+import { DetailedUsageTable } from "../components/billingsdk/detailed-usage-table";
+import { ProrationPreview } from "../components/billingsdk/proration-preview";
 
 // --- Types ---
 type Status =
@@ -1312,50 +1316,42 @@ export function CommissionBreakdown() {
                 </div>
 
                 {/* Section 2: Pre-Split Deductions */}
-                <div className="border rounded-lg bg-background overflow-hidden shadow-sm border-border/60">
-                  <div className="flex items-center justify-between bg-muted/30 pr-3">
-                    <CDASectionHeader
-                      title="02. Pre-Split Deductions"
-                      className="bg-transparent"
-                    />
+                <div className="space-y-0">
+                  <div className="flex items-center justify-between mb-2 px-1">
+                    <h3 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      02. Pre-Split Deductions
+                    </h3>
                     {isEditable && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 text-[10px] gap-1.5 px-2"
-                          >
+                          <Button variant="ghost" size="sm" className="h-7 text-[10px] gap-1.5 px-2">
                             <Plus className="size-3" /> Add
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48">
-                          <DropdownMenuItem onClick={() => setIsDeductionOpen(true)}>
-                            Add Credit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => setIsDeductionOpen(true)}>
-                            Add Referral Fee
-                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setIsDeductionOpen(true)}>Add Credit</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setIsDeductionOpen(true)}>Add Referral Fee</DropdownMenuItem>
                           {role !== "agent" && (
-                            <DropdownMenuItem onClick={() => setIsDeductionOpen(true)}>
-                              Add Pre-Split Deduction
-                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setIsDeductionOpen(true)}>Add Pre-Split Deduction</DropdownMenuItem>
                           )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     )}
                   </div>
-                  <div className="divide-y divide-border/50">
-                    {data.globalDeductions.map((d) => (
-                      <SpreadsheetRow
-                        key={d.id}
-                        label={d.label}
-                        value={-d.amount}
-                        variant="danger"
-                        isSelected={selectedNode === `deduction-${d.id}`}
-                        onClick={() => setSelectedNode(`deduction-${d.id}`)}
-                      />
-                    ))}
+                  <UpcomingCharges
+                    title="Pre-Split Deductions"
+                    description="Deducted from GCI before agent splits are applied"
+                    nextBillingDate={data.closeDate}
+                    totalAmount={`-$${globalDeductionTotal.toLocaleString()}`}
+                    charges={data.globalDeductions.map((d) => ({
+                      id: d.id,
+                      description: d.label,
+                      amount: `-$${d.amount.toLocaleString()}`,
+                      date: `Deducted at closing · ${data.closeDate}`,
+                      type: d.type === "credit" ? "prorated" : d.type === "referral" ? "one-time" : "recurring",
+                    }))}
+                  />
+                  <div className="mt-2 px-1">
                     <SpreadsheetRow
                       label="Gross After Deductions"
                       value={grossAfterDeductions}
@@ -1431,59 +1427,79 @@ export function CommissionBreakdown() {
                               </Button>
                             )}
                           </div>
-                          <div className="divide-y divide-border/40">
-                            {side.agents.map((agent) => renderAgentRow(agent, sideAmount))}
-                            {side.agents.length === 0 && (
-                              <div className="p-6 text-center">
-                                <p className="text-[11px] text-muted-foreground italic">
-                                  No agents assigned to this side
-                                </p>
+                          {side.agents.length === 0 ? (
+                            <div className="p-6 text-center">
+                              <p className="text-[11px] text-muted-foreground italic">
+                                No agents assigned to this side
+                              </p>
+                            </div>
+                          ) : (
+                            <div>
+                              <DetailedUsageTable
+                                className="rounded-none border-0 shadow-none"
+                                title=""
+                                description={`${side.type.charAt(0).toUpperCase() + side.type.slice(1)} side · $${sideAmount.toLocaleString()} distributable`}
+                                resources={side.agents.map((a) => ({
+                                  name: a.name,
+                                  used: a.allocationPct,
+                                  limit: 100,
+                                  unit: "%",
+                                  percentage: a.allocationPct,
+                                }))}
+                              />
+                              <div className="divide-y divide-border/40 border-t">
+                                {side.agents.map((agent) => renderAgentRow(agent, sideAmount))}
                               </div>
-                            )}
-                          </div>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
                   </div>
                 </div>
 
-                {/* Allocation Bar */}
-                <div className="space-y-2 pt-2">
-                  <div className="flex h-2 w-full rounded-full overflow-hidden bg-muted">
-                    {data.sides
-                      .flatMap((s) => s.agents)
-                      .map((a, i) => (
-                        <div
-                          key={a.id}
-                          className={cn(
-                            "h-full transition-all",
-                            i % 2 === 0 ? "bg-indigo-500" : "bg-emerald-500"
-                          )}
-                          style={{
-                            width: `${(a.allocationPct / 100) * (data.sides.find((s) => s.agents.includes(a))?.percentage || 0)}%`,
-                          }}
-                        />
-                      ))}
-                  </div>
-                  <div className="flex items-center justify-center flex-wrap gap-x-5 gap-y-1">
-                    {data.sides
-                      .flatMap((s) => s.agents)
-                      .map((a, i) => (
-                        <div key={a.id} className="flex items-center gap-1.5">
-                          <div
-                            className={cn(
-                              "size-2 rounded-full",
-                              i % 2 === 0 ? "bg-indigo-500" : "bg-emerald-500"
-                            )}
-                          />
-                          <span className="text-[10px] text-muted-foreground">
-                            {a.name} ({a.allocationPct}%)
-                          </span>
-                        </div>
-                      ))}
-                  </div>
-                </div>
+                {/* Allocation Bar — UsageMeterLinear */}
+                <UsageMeterLinear
+                  title="Side Allocation Overview"
+                  description="Percentage of GCI after deductions allocated to each side"
+                  showStatusBadges={false}
+                  usage={data.sides
+                    .filter((s) => s.percentage > 0)
+                    .map((s) => ({
+                      name: `${s.type.charAt(0).toUpperCase() + s.type.slice(1)} Side`,
+                      usage: s.percentage,
+                      limit: 100,
+                    }))}
+                />
               </>
+            )}
+
+            {/* Proration Preview — shown when TL has requested changes */}
+            {status === "revision_requested" && (
+              <ProrationPreview
+                originalLabel="Original CDA"
+                revisedLabel="After Corrections"
+                effectiveDate={data.closeDate}
+                originalTotal={`$${netPayable.toLocaleString()}`}
+                revisedTotal={`$${Math.max(0, netPayable - 25).toLocaleString()}`}
+                netDelta="-$25"
+                netDeltaSign="negative"
+                lineItems={[
+                  ...data.globalDeductions.map((d) => ({
+                    label: d.label,
+                    originalAmount: `-$${d.amount.toLocaleString()}`,
+                    revisedAmount: `-$${d.amount.toLocaleString()}`,
+                    changed: false,
+                  })),
+                  {
+                    label: "Marketing Fee (Flagged by TL)",
+                    originalAmount: "-$125",
+                    revisedAmount: "-$150",
+                    changed: true,
+                    delta: "+$25",
+                  },
+                ]}
+              />
             )}
 
             {/* Audit Log Section */}
