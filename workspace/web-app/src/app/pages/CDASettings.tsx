@@ -16,6 +16,7 @@ import {
   Plus,
   ReceiptText,
   Rss,
+  Search,
   Settings,
   Trash2,
   X,
@@ -34,7 +35,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../components/ui/alert-dialog";
-import { Avatar, AvatarFallback } from "../components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
@@ -68,6 +69,15 @@ import {
 import { Separator } from "../components/ui/separator";
 import { Switch } from "../components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
+import { cn } from "../components/ui/utils";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../components/ui/table";
 import { Toaster } from "../components/ui/sonner";
 import { FeeBuilderModal, type FeeTypeDraft } from "../components/finance/fee-builder-modal";
 
@@ -113,6 +123,7 @@ type Agent = {
   email: string;
   role: "Team Lead" | "Agent";
   hasDefault: boolean;
+  avatarUrl?: string;
 };
 
 type TierRow = {
@@ -166,12 +177,15 @@ type PlanErrors = Partial<
 };
 
 const agents: Agent[] = [
-  { id: "vanessa", name: "Vanessa Brown", email: "vanessa@radiusagent.com", role: "Team Lead", hasDefault: true },
-  { id: "rod", name: "Rod Watson", email: "rod@radiusagent.com", role: "Agent", hasDefault: false },
-  { id: "ila", name: "Ila Corcoran", email: "ila@radiusagent.com", role: "Agent", hasDefault: true },
-  { id: "michael", name: "Michael Loft", email: "michael@radiusagent.com", role: "Agent", hasDefault: false },
-  { id: "scott", name: "Scott Kato", email: "scott@radiusagent.com", role: "Team Lead", hasDefault: false },
-  { id: "priya", name: "Priya Shah", email: "priya@radiusagent.com", role: "Agent", hasDefault: false },
+  { id: "a1", name: "Ila Corcoran", role: "Primary Agent", email: "ila@radiusagent.com", avatarUrl: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=150&auto=format&fit=crop", hasDefault: true },
+  { id: "a2", name: "Michael Tran", role: "Co-Agent", email: "michael@radiusagent.com", avatarUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=150&auto=format&fit=crop", hasDefault: false },
+  { id: "a3", name: "Sarah Jenkins", role: "Team Lead", email: "sarah@radiusagent.com", avatarUrl: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?q=80&w=150&auto=format&fit=crop", hasDefault: false },
+  { id: "a4", name: "David Chen", role: "Broker", email: "david@radiusagent.com", avatarUrl: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=150&auto=format&fit=crop", hasDefault: false },
+  { id: "a5", name: "Emma Wilson", role: "Associate", email: "emma@radiusagent.com", avatarUrl: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=150&auto=format&fit=crop", hasDefault: false },
+  { id: "a6", name: "James Miller", role: "Agent", email: "james@radiusagent.com", avatarUrl: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=150&auto=format&fit=crop", hasDefault: false },
+  { id: "a7", name: "Olivia Taylor", role: "Agent", email: "olivia@radiusagent.com", avatarUrl: "https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?q=80&w=150&auto=format&fit=crop", hasDefault: false },
+  { id: "a8", name: "Noah Garcia", role: "Agent", email: "noah@radiusagent.com", avatarUrl: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=150&auto=format&fit=crop", hasDefault: false },
+  { id: "a9", name: "Sophia Brown", role: "Agent", email: "sophia@radiusagent.com", avatarUrl: "https://images.unsplash.com/photo-1517841905240-472988babdf9?q=80&w=150&auto=format&fit=crop", hasDefault: false },
 ];
 
 const defaultTiers: TierRow[] = [
@@ -182,26 +196,29 @@ const defaultTiers: TierRow[] = [
 ];
 
 const seedPlans: CommissionPlan[] = [
-  { id: "plan-seed-1", name: "80/20 Standard", type: "standard", agentSplit: 80, teamSplit: 20, feeType: "flat", feeAmount: 495, capAmount: 18000, dealTypes: ["Buyer", "Seller"], assignedAgentsCount: 12, resetPeriod: "yearly", basedOn: "units", tiers: [] },
-  { id: "plan-seed-2", name: "70/30 Standard", type: "standard", agentSplit: 70, teamSplit: 30, feeType: "flat", feeAmount: 495, capAmount: 15000, dealTypes: ["Buyer", "Seller"], assignedAgentsCount: 4, resetPeriod: "yearly", basedOn: "units", tiers: [] },
-  { id: "plan-seed-3", name: "Keystone Tiered", type: "tiered", agentSplit: 80, teamSplit: 20, feeType: "flat", feeAmount: 0, capAmount: 0, dealTypes: ["Buyer", "Seller"], assignedAgentsCount: 2, resetPeriod: "yearly", basedOn: "units", tiers: defaultTiers.map((t) => ({ ...t })) },
-  { id: "plan-seed-4", name: "Lease Referral Plan", type: "standard", agentSplit: 60, teamSplit: 40, feeType: "flat", feeAmount: 0, capAmount: 0, dealTypes: ["Lease", "Landlord"], assignedAgentsCount: 0, resetPeriod: "yearly", basedOn: "units", tiers: [] },
+  { id: "p1", name: "80/20 Standard", type: "standard", agentSplit: 80, teamSplit: 20, feeType: "flat", feeAmount: 495, capAmount: 18000, dealTypes: ["Buyer", "Seller"], assignedAgentsCount: 12, resetPeriod: "yearly", basedOn: "units", tiers: [] },
+  { id: "p2", name: "70/30 Standard", type: "standard", agentSplit: 70, teamSplit: 30, feeType: "flat", feeAmount: 495, capAmount: 15000, dealTypes: ["Buyer", "Seller"], assignedAgentsCount: 4, resetPeriod: "yearly", basedOn: "units", tiers: [] },
+  { id: "p3", name: "Keystone Tiered", type: "tiered", agentSplit: 80, teamSplit: 20, feeType: "flat", feeAmount: 0, capAmount: 0, dealTypes: ["Buyer", "Seller"], assignedAgentsCount: 2, resetPeriod: "yearly", basedOn: "units", tiers: defaultTiers.map((t) => ({ ...t })) },
+  { id: "p4", name: "Lease Referral Plan", type: "standard", agentSplit: 60, teamSplit: 40, feeType: "flat", feeAmount: 0, capAmount: 0, dealTypes: ["Lease", "Landlord"], assignedAgentsCount: 0, resetPeriod: "yearly", basedOn: "units", tiers: [] },
 ];
 
 const seedFees: FeeRecord[] = [
-  { id: "fee-seed-1", name: "TC Fee", type: "flat", amount: "500", timing: "pre-split", appliesToMode: "team", agentIds: [], slidingScale: false, contributesToCap: false, tiers: [] },
-  { id: "fee-seed-2", name: "RM Fee", type: "flat", amount: "300", timing: "post-split", appliesToMode: "agents", agentIds: [], slidingScale: false, contributesToCap: true, tiers: [] },
-  { id: "fee-seed-3", name: "E&O Fee", type: "flat", amount: "125", timing: "post-split", appliesToMode: "agents", agentIds: [], slidingScale: false, contributesToCap: false, tiers: [] },
-  { id: "fee-seed-4", name: "Compliance Review", type: "flat", amount: "250", timing: "pre-split", appliesToMode: "team", agentIds: [], slidingScale: false, contributesToCap: false, tiers: [] },
-  { id: "fee-seed-5", name: "Broker Admin Fee", type: "percentage", amount: "2", timing: "post-split", appliesToMode: "team", agentIds: [], slidingScale: false, contributesToCap: true, tiers: [] },
-  { id: "fee-seed-6", name: "Sliding Scale Team Fee", type: "percentage", amount: "3", timing: "post-split", appliesToMode: "team", agentIds: [], slidingScale: true, contributesToCap: false, tiers: [] },
+  { id: "f1", name: "TC Fee", type: "flat", amount: "500", timing: "pre-split", appliesToMode: "team", agentIds: [], slidingScale: false, contributesToCap: false, tiers: [] },
+  { id: "f2", name: "RM Fee", type: "flat", amount: "300", timing: "post-split", appliesToMode: "agents", agentIds: ["a1", "a3", "a5"], slidingScale: false, contributesToCap: true, tiers: [] },
+  { id: "f3", name: "E&O Fee", type: "flat", amount: "125", timing: "post-split", appliesToMode: "agents", agentIds: ["a1", "a2", "a3"], slidingScale: false, contributesToCap: false, tiers: [] },
+  { id: "f4", name: "Compliance Review", type: "flat", amount: "250", timing: "pre-split", appliesToMode: "team", agentIds: [], slidingScale: false, contributesToCap: false, tiers: [] },
 ];
 
-const seedAssignments: AgentAssignment[] = [
-  { id: "assign-1", agentId: "ila", planId: "plan-seed-1", feeIds: ["fee-seed-1", "fee-seed-2", "fee-seed-3"], applyToActiveDeals: false },
-  { id: "assign-2", agentId: "michael", planId: "plan-seed-2", feeIds: ["fee-seed-1"], applyToActiveDeals: false },
-  { id: "assign-3", agentId: "rod", planId: null, feeIds: [], applyToActiveDeals: false },
-  { id: "assign-4", agentId: "vanessa", planId: "plan-seed-1", feeIds: ["fee-seed-1", "fee-seed-3"], applyToActiveDeals: false },
+export const seedAssignments: AgentAssignment[] = [
+  { id: "as1", agentId: "a1", planId: "p1", feeIds: ["f1", "f2"], applyToActiveDeals: true },
+  { id: "as2", agentId: "a2", planId: "p2", feeIds: ["f3"], applyToActiveDeals: false },
+  { id: "as3", agentId: "a3", planId: "p1", feeIds: ["f1", "f2", "f3"], applyToActiveDeals: true },
+  { id: "as4", agentId: "a4", planId: "p3", feeIds: ["f4"], applyToActiveDeals: true },
+  { id: "as5", agentId: "a5", planId: "p2", feeIds: ["f2"], applyToActiveDeals: false },
+  { id: "as6", agentId: "a6", planId: "p1", feeIds: ["f1"], applyToActiveDeals: true },
+  { id: "as7", agentId: "a7", planId: "p1", feeIds: ["f1", "f3"], applyToActiveDeals: true },
+  { id: "as8", agentId: "a8", planId: "p2", feeIds: ["f2", "f4"], applyToActiveDeals: false },
+  { id: "as9", agentId: "a9", planId: "p3", feeIds: ["f3"], applyToActiveDeals: true },
 ];
 
 function getFreshAssignDefaultsForm(): AssignDefaultsForm {
@@ -389,32 +406,84 @@ function CommissionPlanCard({
   onArchive: (plan: CommissionPlan) => void;
 }) {
   return (
-    <div className="flex min-h-[66px] items-center justify-between border-b px-6 py-3 last:border-b-0">
+    <div className="group flex min-h-[66px] items-center justify-between border-b px-6 py-3 last:border-b-0 hover:bg-muted/30 transition-colors duration-150 cursor-pointer">
       <div className="flex flex-col gap-1">
         <div className="flex items-center gap-2">
           <p className="text-sm font-medium leading-5 text-foreground">{plan.name}</p>
           <PlanTypeBadge type={plan.type} />
         </div>
-        <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+        <div className="flex flex-nowrap items-center gap-4 text-xs text-muted-foreground overflow-hidden">
           {plan.type === "standard" ? (
-            <span>Agent {plan.agentSplit}% / Team {plan.teamSplit}%</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-muted-foreground">Agent</span>
+              <span className="font-semibold text-foreground">{plan.agentSplit}%</span>
+              <span className="text-muted-foreground mx-0.5">·</span>
+              <span className="text-muted-foreground">Team</span>
+              <span className="font-semibold text-foreground">{plan.teamSplit}%</span>
+            </div>
           ) : (
-            <>
-              <span>Based on: {formatBasedOn(plan.basedOn)}</span>
-              <span>{plan.tiers.length} tiers</span>
-            </>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1">
+                <span className="text-muted-foreground">Based on</span>
+                <span className="font-medium text-foreground">{formatBasedOn(plan.basedOn)}</span>
+              </div>
+              <span className="text-muted-foreground">·</span>
+              <div className="flex items-center gap-1">
+                <span className="font-medium text-foreground">{plan.tiers.length}</span>
+                <span className="text-muted-foreground">tiers</span>
+              </div>
+            </div>
           )}
-          <span>Fee: {formatFee(plan)}</span>
-          <span>Cap: {formatMoney(plan.capAmount)}</span>
-          {plan.dealTypes.map((dealType) => (
-            <Badge key={dealType} variant="secondary" className="text-muted-foreground">
-              {dealType}
-            </Badge>
-          ))}
-          <span className="inline-flex items-center gap-1">
-            <Users className="size-3" />
-            {plan.assignedAgentsCount} agents
-          </span>
+          <span className="text-muted-foreground/30 mx-1">·</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-muted-foreground">Fee</span>
+            <span className="font-semibold text-foreground">{formatFee(plan)}</span>
+          </div>
+          <span className="text-muted-foreground/30 mx-1">·</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-muted-foreground">Cap</span>
+            <span className="font-semibold text-foreground">{formatMoney(plan.capAmount)}</span>
+          </div>
+          <div className="flex items-center gap-1.5 ml-2">
+            {plan.dealTypes.map((dealType) => (
+              <Badge 
+                key={dealType} 
+                variant="secondary" 
+                className={cn(
+                  "px-2 py-0 h-5 text-[10px] font-semibold border-transparent",
+                  dealType === "Buyer" && "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400",
+                  dealType === "Seller" && "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400",
+                  dealType === "Lease" && "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
+                )}
+              >
+                {dealType}
+              </Badge>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 border-l border-border/50 pl-4 ml-2">
+            <div className="flex -space-x-2">
+              {(() => {
+                const assignedAgentIds = seedAssignments.filter(a => a.planId === plan.id).map(a => a.agentId);
+                const assignedAgents = agents.filter(a => assignedAgentIds.includes(a.id));
+                return (
+                  <>
+                    {assignedAgents.slice(0, 3).map((agent) => (
+                      <Avatar key={agent.id} className="size-6 border-2 border-background ring-1 ring-border/5">
+                        <AvatarImage src={agent.avatarUrl} alt={agent.name} />
+                        <AvatarFallback className="text-[8px]">{agent.name.split(" ").map((p) => p[0]).join("")}</AvatarFallback>
+                      </Avatar>
+                    ))}
+                    {assignedAgents.length > 3 && (
+                      <div className="flex size-6 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground border-2 border-background ring-1 ring-border/5">
+                        +{assignedAgents.length - 3}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+            <span className="text-[11px] font-medium text-muted-foreground/60">agents</span>
+          </div>
         </div>
       </div>
       <DropdownMenu>
@@ -530,7 +599,7 @@ function AgentMultiSelect({
                 </AvatarFallback>
               </Avatar>
               <span className="flex-1 text-sm font-medium">{agent.name}</span>
-              <Badge variant="outline" className="shrink-0 text-xs">{agent.role}</Badge>
+
             </DropdownMenuItem>
           ))}
           {filtered.length === 0 && (
@@ -1095,17 +1164,23 @@ function AssignDefaultsDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="!flex !h-auto !max-h-[82vh] !w-[560px] !max-w-[calc(100vw-48px)] !flex-col !gap-0 !overflow-hidden !rounded-[12px] !p-0 sm:!max-w-[560px] [&>button[data-slot=dialog-close]]:hidden">
-        <DialogHeader className="!flex !flex-row !items-start !justify-between !gap-4 border-b px-6 pt-6 pb-4 !text-left">
-          <DialogTitle className="text-base font-semibold leading-5">Assign Defaults</DialogTitle>
-          <DialogDescription className="sr-only">Assign commission plan and fee defaults to agents.</DialogDescription>
-          <button
-            type="button"
-            aria-label="Close"
-            className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            onClick={() => onOpenChange(false)}
-          >
-            <X className="size-4" />
-          </button>
+        <DialogHeader className="border-b px-6 pt-6 pb-4 !text-left">
+          <div className="flex items-start justify-between">
+            <div>
+              <DialogTitle className="text-base font-semibold leading-5">Assign Defaults</DialogTitle>
+              <DialogDescription className="mt-1 text-xs text-muted-foreground">
+                Set default commission plans and fees for your agents.
+              </DialogDescription>
+            </div>
+            <button
+              type="button"
+              aria-label="Close"
+              className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              onClick={() => onOpenChange(false)}
+            >
+              <X className="size-4" />
+            </button>
+          </div>
         </DialogHeader>
 
         <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-6 py-5">
@@ -1152,7 +1227,7 @@ function AssignDefaultsDialog({
               </Avatar>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium">{lockedAgent.name}</p>
-                <p className="text-xs text-muted-foreground">{lockedAgent.role}</p>
+
               </div>
               <Badge variant="secondary" className="text-xs shrink-0">Agent locked</Badge>
             </div>
@@ -1291,17 +1366,23 @@ function AddPlanDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="!flex !h-auto !max-h-[82vh] !w-[560px] !max-w-[calc(100vw-48px)] !flex-col !gap-0 !overflow-hidden !rounded-[12px] !p-0 sm:!max-w-[560px] [&>button[data-slot=dialog-close]]:hidden">
-        <DialogHeader className="!flex !flex-row !items-start !justify-between !gap-4 border-b px-6 pt-6 pb-4 !text-left">
-          <DialogTitle className="whitespace-nowrap text-base font-semibold leading-5">{title}</DialogTitle>
-          <DialogDescription className="sr-only">Create commission plan.</DialogDescription>
-          <button
-            type="button"
-            aria-label="Close"
-            className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            onClick={() => onOpenChange(false)}
-          >
-            <X className="size-4" />
-          </button>
+        <DialogHeader className="border-b px-6 pt-6 pb-4 !text-left">
+          <div className="flex items-start justify-between">
+            <div>
+              <DialogTitle className="text-base font-semibold leading-5">{title}</DialogTitle>
+              <DialogDescription className="mt-1 text-xs text-muted-foreground">
+                Define split rules, caps, and transaction types for this plan.
+              </DialogDescription>
+            </div>
+            <button
+              type="button"
+              aria-label="Close"
+              className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              onClick={() => onOpenChange(false)}
+            >
+              <X className="size-4" />
+            </button>
+          </div>
         </DialogHeader>
         <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
           <PlanSetupFields
@@ -1345,98 +1426,201 @@ function DefaultAssignmentsTable({
   onClear: (assignment: AgentAssignment) => void;
   onAddDefaults: () => void;
 }) {
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [search, setSearch] = useState("");
+
+  const filteredAssignments = useMemo(() => {
+    if (!search) return assignments;
+    const lowerSearch = search.toLowerCase();
+    return assignments.filter((assignment) => {
+      const agent = agents.find((a) => a.id === assignment.agentId);
+      if (!agent) return false;
+      return (
+        agent.name.toLowerCase().includes(lowerSearch) ||
+        agent.email.toLowerCase().includes(lowerSearch) ||
+        agent.role.toLowerCase().includes(lowerSearch)
+      );
+    });
+  }, [assignments, search]);
+
+  const toggleAll = () => {
+    if (selectedIds.length === filteredAssignments.length && filteredAssignments.length > 0) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredAssignments.map((a) => a.id));
+    }
+  };
+
+  const toggleOne = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
+
   return (
     <section className="flex flex-col gap-4">
-      <div className="flex items-end justify-between">
-        <div>
+      <div className="flex items-end justify-between mb-4">
+        <div className="flex flex-col gap-1">
           <h2 className="text-base font-medium leading-6 text-foreground">Default Assignments</h2>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground max-w-md">
             Connect plans and fees to agents so new CDA estimates use the right calculation rules.
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="border-primary text-primary hover:text-primary"
-          onClick={onAddDefaults}
-        >
-          <Plus className="size-4" />
-          Add Defaults
-        </Button>
+        <div className="flex items-center gap-3">
+          <div className="relative w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground/50" />
+            <Input 
+              placeholder="Search agents…" 
+              className="pl-9 h-9 text-sm border-border/50 focus:border-primary/50 focus:ring-primary/20 transition-all bg-background/50 shadow-none"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            {selectedIds.length > 0 && (
+              <Button variant="outline" size="sm" className="text-destructive border-destructive/20 hover:bg-destructive/5 h-9 px-4">
+                Bulk Clear ({selectedIds.length})
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-primary text-primary hover:text-primary h-9 px-4"
+              onClick={onAddDefaults}
+            >
+              <Plus className="size-4" />
+              Add Defaults
+            </Button>
+          </div>
+        </div>
       </div>
-      <Card className="rounded-[14px] border-border shadow-none">
-        <CardContent className="px-0 pb-0 [&:last-child]:pb-0">
-          {assignments.map((assignment) => {
-            const agent = agents.find((a) => a.id === assignment.agentId);
-            const plan = plans.find((p) => p.id === assignment.planId);
-            const assignedFees = fees.filter((f) => assignment.feeIds.includes(f.id));
-            if (!agent) return null;
-            return (
-              <div key={assignment.id} className="flex min-h-[66px] items-center justify-between border-b px-6 py-3 last:border-b-0">
-                <div className="flex items-center gap-3">
-                  <Avatar className="size-8 shrink-0">
-                    <AvatarFallback className="text-xs">
-                      {agent.name.split(" ").map((p) => p[0]).join("")}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex flex-col gap-0.5">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium leading-5">{agent.name}</p>
-                      <Badge variant="outline" className="text-xs">{agent.role}</Badge>
+
+      <Card className="rounded-[14px] border-border shadow-none overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent border-b">
+              <TableHead className="w-[50px] pl-6">
+                <Checkbox
+                  checked={selectedIds.length === assignments.length && assignments.length > 0}
+                  onCheckedChange={toggleAll}
+                  aria-label="Select all"
+                />
+              </TableHead>
+              <TableHead className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/60">Agent</TableHead>
+              <TableHead className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/60">Email</TableHead>
+              <TableHead className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/60">Commission Plan</TableHead>
+              <TableHead className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/60">Default Fees</TableHead>
+              <TableHead className="w-[50px] pr-6"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredAssignments.map((assignment) => {
+              const agent = agents.find((a) => a.id === assignment.agentId);
+              const plan = plans.find((p) => p.id === assignment.planId);
+              const assignedFees = fees.filter((f) => assignment.feeIds.includes(f.id));
+              if (!agent) return null;
+              
+              const isSelected = selectedIds.includes(assignment.id);
+
+              return (
+                <TableRow 
+                  key={assignment.id} 
+                  className={cn(
+                    "group h-[72px] hover:bg-muted/30 transition-colors border-b last:border-0",
+                    isSelected && "bg-muted/20"
+                  )}
+                  onClick={() => toggleOne(assignment.id)}
+                >
+                  <TableCell className="pl-6" onClick={(e) => e.stopPropagation()}>
+                    <Checkbox
+                      checked={isSelected}
+                      onCheckedChange={() => toggleOne(assignment.id)}
+                      aria-label={`Select ${agent.name}`}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      <Avatar className="size-8 shrink-0 border-2 border-background ring-1 ring-border/5 overflow-hidden">
+                        <AvatarImage src={agent.avatarUrl} alt={agent.name} className="object-cover aspect-square" />
+                        <AvatarFallback className="text-xs">{agent.name.split(" ").map((p) => p[0]).join("")}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex items-center gap-2 overflow-hidden whitespace-nowrap">
+                        <p className="text-sm font-semibold text-foreground shrink-0">{agent.name}</p>
+
+                      </div>
                     </div>
-                    <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                  </TableCell>
+                  <TableCell>
+                    <p className="text-[13px] text-muted-foreground font-medium truncate">{agent.email}</p>
+                  </TableCell>
+                    <TableCell>
                       {plan ? (
-                        <span>{plan.name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-foreground">{plan.name}</span>
+                          {plan.type === "standard" && (
+                            <span className="text-[11px] text-muted-foreground/60 font-medium">({plan.agentSplit}/{plan.teamSplit})</span>
+                          )}
+                        </div>
                       ) : (
-                        <span className="italic">No plan</span>
+                        <span className="text-xs italic text-amber-600/60 font-medium">No plan assigned</span>
                       )}
-                      {assignedFees.length > 0 && (
-                        <>
-                          <span>·</span>
-                          <span>{assignedFees.map((f) => f.name).join(", ")}</span>
-                        </>
+                    </TableCell>
+                    <TableCell>
+                      {assignedFees.length > 0 ? (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {assignedFees.slice(0, 2).map((fee) => (
+                            <Badge key={fee.id} variant="secondary" className="px-2 py-0 h-4.5 text-[10px] font-semibold bg-indigo-50 text-indigo-700 border-transparent">
+                              {fee.name}
+                            </Badge>
+                          ))}
+                          {assignedFees.length > 2 && (
+                            <span className="text-[10px] font-bold text-muted-foreground/40">+{assignedFees.length - 2} more</span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground/40 font-medium">None</span>
                       )}
-                    </div>
-                  </div>
-                </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`${agent.name} assignment menu`}
-                      className="size-8"
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      <MoreVertical className="size-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" sideOffset={8} className="w-[160px]">
-                    <DropdownMenuGroup>
-                      <DropdownMenuItem onClick={() => onEdit(assignment)}>
-                        <Edit3 className="size-4" />
-                        Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => onPreview(assignment)}>
-                        <FileText className="size-4" />
-                        Preview
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => onDeals(assignment)}>
-                        <Briefcase className="size-4" />
-                        Deals
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem variant="destructive" onClick={() => onClear(assignment)}>
-                        <Trash2 className="size-4" />
-                        Clear
-                      </DropdownMenuItem>
-                    </DropdownMenuGroup>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            );
-          })}
-        </CardContent>
+                    </TableCell>
+                  <TableCell className="pr-6" onClick={(e) => e.stopPropagation()}>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`${agent.name} assignment menu`}
+                          className="size-8 hover:bg-background shadow-sm"
+                        >
+                          <MoreVertical className="size-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" sideOffset={8} className="w-[160px]">
+                        <DropdownMenuGroup>
+                          <DropdownMenuItem onClick={() => onEdit(assignment)}>
+                            <Edit3 className="size-4" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => onPreview(assignment)}>
+                            <FileText className="size-4" />
+                            Preview
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => onDeals(assignment)}>
+                            <Briefcase className="size-4" />
+                            Deals
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem variant="destructive" onClick={() => onClear(assignment)}>
+                            <Trash2 className="size-4" />
+                            Clear
+                          </DropdownMenuItem>
+                        </DropdownMenuGroup>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
       </Card>
     </section>
   );
@@ -2002,18 +2186,56 @@ export function CDASettings() {
         <Card className="rounded-[14px] border-border shadow-none">
           <CardContent className="px-0 pb-0 [&:last-child]:pb-0">
             {state.fees.map((fee) => (
-              <div key={fee.id} className="flex min-h-[66px] items-center justify-between border-b px-6 py-3 last:border-b-0">
+              <div key={fee.id} className="group flex min-h-[66px] items-center justify-between border-b px-6 py-3 last:border-b-0 hover:bg-muted/30 transition-colors duration-150 cursor-pointer">
                 <div className="flex flex-col gap-1">
                   <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium">{fee.name}</p>
-                    <Badge variant="secondary">{fee.type === "flat" ? "Flat" : "Percentage"}</Badge>
+                    <p className="text-sm font-medium leading-5 text-foreground">{fee.name}</p>
+                    <Badge 
+                      variant="secondary" 
+                      className={cn(
+                        "px-2 py-0 h-4.5 text-[10px] font-semibold border-transparent",
+                        fee.type === "flat" ? "bg-indigo-50 text-indigo-700" : "bg-emerald-50 text-emerald-700"
+                      )}
+                    >
+                      {fee.type === "flat" ? "Flat" : "Percentage"}
+                    </Badge>
                   </div>
-                  <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-                    <span>{fee.type === "flat" ? `$${fee.amount} flat` : `${fee.amount}%`}</span>
-                    <span>{fee.timing === "pre-split" ? "Pre-Split" : "Post-Split"}</span>
-                    <span>
-                      Applies to: {fee.appliesToMode === "team" ? "Team" : `${fee.agentIds.length} agents`}
+                  <div className="flex flex-nowrap items-center gap-2 text-[11px] text-muted-foreground/80 overflow-hidden">
+                    <span className="font-medium text-foreground">{fee.type === "flat" ? `$${fee.amount} flat` : `${fee.amount}%`}</span>
+                    <span className="text-muted-foreground/30 mx-0.5">·</span>
+                    <span className={cn(
+                      "font-semibold",
+                      fee.timing === "pre-split" ? "text-blue-600" : "text-amber-600"
+                    )}>
+                      {fee.timing === "pre-split" ? "Pre-Split" : "Post-Split"}
                     </span>
+                    <div className="flex items-center gap-2 border-l border-border/50 pl-4 ml-2">
+                      <span className="text-[11px] font-medium text-muted-foreground/60">Applies to</span>
+                      <div className="flex items-center gap-2">
+                        {fee.appliesToMode === "team" ? (
+                          <Badge variant="outline" className="text-[10px] h-4 px-1.5 font-medium border-primary/20 text-primary bg-primary/5">
+                            Team
+                          </Badge>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <div className="flex -space-x-2">
+                              {agents.filter(a => fee.agentIds.includes(a.id)).slice(0, 3).map((agent) => (
+                                <Avatar key={agent.id} className="size-5 border-2 border-background ring-1 ring-border/5">
+                                  <AvatarImage src={agent.avatarUrl} alt={agent.name} />
+                                  <AvatarFallback className="text-[7px]">{agent.name.split(" ").map((p) => p[0]).join("")}</AvatarFallback>
+                                </Avatar>
+                              ))}
+                              {fee.agentIds.length > 3 && (
+                                <div className="flex size-5 items-center justify-center rounded-full bg-muted text-[9px] font-semibold text-muted-foreground border-2 border-background ring-1 ring-border/5">
+                                  +{fee.agentIds.length - 3}
+                                </div>
+                              )}
+                            </div>
+                            <span className="text-[11px] font-medium text-muted-foreground/60">agents</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
                 <DropdownMenu>
@@ -2058,7 +2280,7 @@ export function CDASettings() {
     "Finances",
     "CDA Settings",
     "Team settings",
-    "Collaborators",
+    "Agents",
     "Transaction settings",
     "Pods",
     "Automations",
