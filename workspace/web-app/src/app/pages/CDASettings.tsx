@@ -80,6 +80,7 @@ import {
 } from "../components/ui/table";
 import { Toaster } from "../components/ui/sonner";
 import { FeeBuilderModal, type FeeTypeDraft } from "../components/finance/fee-builder-modal";
+import { CDAFlowSwitcher } from "../components/finance/cda-flow-switcher";
 
 type PlanType = "standard" | "tiered";
 type FeeType = "flat" | "percentage";
@@ -1526,7 +1527,7 @@ function DefaultAssignmentsTable({
                 <TableRow 
                   key={assignment.id} 
                   className={cn(
-                    "group h-[72px] hover:bg-muted/30 transition-colors border-b last:border-0",
+                    "group h-8 hover:bg-muted/30 transition-colors border-b last:border-0",
                     isSelected && "bg-muted/20"
                   )}
                   onClick={() => toggleOne(assignment.id)}
@@ -2648,6 +2649,7 @@ export function CDASettings() {
       })()}
 
       <Toaster />
+      <CDAFlowSwitcher />
     </div>
   );
 }

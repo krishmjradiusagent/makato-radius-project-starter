@@ -35,8 +35,10 @@ import {
   ExternalLink,
   FileText,
   Settings,
+  Calculator,
 } from "lucide-react";
 import { cn } from "../components/ui/utils";
+import { CDAFlowSwitcher } from "../components/finance/cda-flow-switcher";
 
 export function DealTermsEntry() {
   const [purchasePrice, setPurchasePrice] = useState("1000000");
@@ -102,10 +104,10 @@ export function DealTermsEntry() {
             </div>
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2 mr-2 pr-2 border-r">
-                <Link to="/breakdown">
+                <Link to="/cda/commission-breakdown">
                   <Button variant="ghost" size="sm" className="h-7 text-xs">
-                    <ExternalLink className="size-3 mr-1.5" />
-                    Breakdown
+                    <Calculator className="size-3 mr-1.5" />
+                    Commission Breakdown
                   </Button>
                 </Link>
                 <Link to="/team-lead-review">
@@ -572,6 +574,7 @@ export function DealTermsEntry() {
           </div>
         </div>
       </div>
+      <CDAFlowSwitcher />
     </div>
   );
 }

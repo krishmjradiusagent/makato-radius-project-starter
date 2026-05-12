@@ -12,6 +12,8 @@ import { FinalizedPDFPage } from "./pages/FinalizedPDFPage";
 import { EdgeCasesPage } from "./pages/EdgeCasesPage";
 import { CDAInsertionMap } from "./pages/CDAInsertionMap";
 import { CDACalculatorBreakdown } from "./pages/CDACalculatorBreakdown";
+import { CommissionBreakdown } from "./pages/CommissionBreakdown";
+import { TransactionDetail } from "./pages/TransactionDetail";
 
 export const router = createBrowserRouter([
   {
@@ -36,7 +38,7 @@ export const router = createBrowserRouter([
   },
   {
     path: "/deal-terms",
-    Component: DealTermsEntry,
+    Component: TransactionDetail,
   },
   {
     path: "/agent-confirmation",
@@ -69,5 +71,13 @@ export const router = createBrowserRouter([
   {
     path: "/calculator-breakdown",
     Component: CDACalculatorBreakdown,
+  },
+  {
+    path: "/cda/commission-breakdown",
+    Component: CommissionBreakdown,
+  },
+  {
+    path: "/transaction-detail",
+    Component: TransactionDetail,
   },
 ]);
