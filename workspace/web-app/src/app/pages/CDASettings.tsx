@@ -86,7 +86,17 @@ type FeeType = "flat" | "percentage";
 type ResetPeriod = "yearly" | "quarterly" | "monthly";
 type BasedOn = "units" | "gci" | "sales-volume";
 type DefaultMode = "all" | "specific";
-type DialogName = "add-plan" | "add-fee" | null;
+type DialogName = "add-plan" | "add-fee" | "assign-defaults" | null;
+
+type AssignDefaultsForm = {
+  planId: string;
+  feeIds: string[];
+  assignMode: "all" | "specific";
+  selectedAgentIds: string[];
+  applyToActiveDeals: boolean;
+};
+
+type AssignDefaultsErrors = Partial<Record<"planId" | "selectedAgentIds", string>>;
 
 type Agent = {
   id: string;
@@ -161,6 +171,26 @@ const defaultTiers: TierRow[] = [
   { id: "tier-3", from: "11", to: "25", agentSplit: "90", teamSplit: "10" },
   { id: "tier-4", from: "26", to: "", agentSplit: "95", teamSplit: "5" },
 ];
+
+const seedPlans: CommissionPlan[] = [
+  { id: "plan-seed-1", name: "80/20 Standard", type: "standard", agentSplit: 80, teamSplit: 20, feeType: "flat", feeAmount: 495, capAmount: 18000, dealTypes: ["Buyer", "Seller"], assignedAgentsCount: 12, resetPeriod: "yearly", basedOn: "units", tiers: [] },
+  { id: "plan-seed-2", name: "70/30 Standard", type: "standard", agentSplit: 70, teamSplit: 30, feeType: "flat", feeAmount: 495, capAmount: 15000, dealTypes: ["Buyer", "Seller"], assignedAgentsCount: 4, resetPeriod: "yearly", basedOn: "units", tiers: [] },
+  { id: "plan-seed-3", name: "Keystone Tiered", type: "tiered", agentSplit: 80, teamSplit: 20, feeType: "flat", feeAmount: 0, capAmount: 0, dealTypes: ["Buyer", "Seller"], assignedAgentsCount: 2, resetPeriod: "yearly", basedOn: "units", tiers: defaultTiers.map((t) => ({ ...t })) },
+  { id: "plan-seed-4", name: "Lease Referral Plan", type: "standard", agentSplit: 60, teamSplit: 40, feeType: "flat", feeAmount: 0, capAmount: 0, dealTypes: ["Lease", "Landlord"], assignedAgentsCount: 0, resetPeriod: "yearly", basedOn: "units", tiers: [] },
+];
+
+const seedFees: FeeRecord[] = [
+  { id: "fee-seed-1", name: "TC Fee", type: "flat", amount: "500", timing: "pre-split", appliesToMode: "team", agentIds: [], slidingScale: false, contributesToCap: false, tiers: [] },
+  { id: "fee-seed-2", name: "RM Fee", type: "flat", amount: "300", timing: "post-split", appliesToMode: "agents", agentIds: [], slidingScale: false, contributesToCap: true, tiers: [] },
+  { id: "fee-seed-3", name: "E&O Fee", type: "flat", amount: "125", timing: "post-split", appliesToMode: "agents", agentIds: [], slidingScale: false, contributesToCap: false, tiers: [] },
+  { id: "fee-seed-4", name: "Compliance Review", type: "flat", amount: "250", timing: "pre-split", appliesToMode: "team", agentIds: [], slidingScale: false, contributesToCap: false, tiers: [] },
+  { id: "fee-seed-5", name: "Broker Admin Fee", type: "percentage", amount: "2", timing: "post-split", appliesToMode: "team", agentIds: [], slidingScale: false, contributesToCap: true, tiers: [] },
+  { id: "fee-seed-6", name: "Sliding Scale Team Fee", type: "percentage", amount: "3", timing: "post-split", appliesToMode: "team", agentIds: [], slidingScale: true, contributesToCap: false, tiers: [] },
+];
+
+function getFreshAssignDefaultsForm(): AssignDefaultsForm {
+  return { planId: "", feeIds: [], assignMode: "specific", selectedAgentIds: [], applyToActiveDeals: false };
+}
 
 function getFreshPlanForm(): PlanForm {
   return {
@@ -860,64 +890,183 @@ function PlanSetupFields({
   );
 }
 
-function DefaultAssignmentSection({
+function AssignDefaultsDialog({
+  open,
   form,
   errors,
+  plans,
+  fees,
   onFormChange,
-  onApplyDefaultToggle,
+  onOpenChange,
+  onSave,
 }: {
-  form: PlanForm;
-  errors: PlanErrors;
-  onFormChange: (patch: Partial<PlanForm>) => void;
-  onApplyDefaultToggle: (checked: boolean) => void;
+  open: boolean;
+  form: AssignDefaultsForm;
+  errors: AssignDefaultsErrors;
+  plans: CommissionPlan[];
+  fees: FeeRecord[];
+  onFormChange: (patch: Partial<AssignDefaultsForm>) => void;
+  onOpenChange: (open: boolean) => void;
+  onSave: () => void;
 }) {
+  const isValid = Boolean(form.planId) && (form.assignMode === "all" || form.selectedAgentIds.length > 0);
+
+  function toggleFee(feeId: string) {
+    onFormChange({
+      feeIds: form.feeIds.includes(feeId)
+        ? form.feeIds.filter((id) => id !== feeId)
+        : [...form.feeIds, feeId],
+    });
+  }
+
   return (
-    <div className="flex flex-col gap-4">
-      <p className="text-sm font-semibold leading-5">Assign Defaults</p>
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <Label htmlFor="apply-default" className="text-sm font-medium">Set as default after save</Label>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Applies this plan to selected agents for new CDA calculations.
-          </p>
-        </div>
-        <Switch
-          id="apply-default"
-          checked={form.applyAsDefault}
-          onCheckedChange={onApplyDefaultToggle}
-        />
-      </div>
-      {form.applyAsDefault && (
-        <RadioGroup
-          value={form.defaultMode}
-          onValueChange={(value) => onFormChange({ defaultMode: value as DefaultMode })}
-          className="flex flex-col gap-2"
-        >
-          <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-3">
-            <RadioGroupItem value="all" className="mt-0.5" />
-            <div className="flex flex-col gap-0.5">
-              <span className="text-sm font-medium leading-5">All team members</span>
-              <span className="text-xs text-muted-foreground">
-                This plan will apply to all current team members for new CDA calculations.
-              </span>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="!flex !h-auto !max-h-[82vh] !w-[560px] !max-w-[calc(100vw-48px)] !flex-col !gap-0 !overflow-hidden !rounded-[12px] !p-0 sm:!max-w-[560px] [&>button[data-slot=dialog-close]]:hidden">
+        <DialogHeader className="!flex !flex-row !items-start !justify-between !gap-4 border-b px-6 pt-6 pb-4 !text-left">
+          <DialogTitle className="text-base font-semibold leading-5">Assign Defaults</DialogTitle>
+          <DialogDescription className="sr-only">Assign commission plan and fee defaults to agents.</DialogDescription>
+          <button
+            type="button"
+            aria-label="Close"
+            className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            onClick={() => onOpenChange(false)}
+          >
+            <X className="size-4" />
+          </button>
+        </DialogHeader>
+
+        <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-6 py-5">
+          {/* Commission Plan */}
+          <div className="flex flex-col gap-2">
+            <Label className="text-sm font-medium">
+              Commission Plan <span className="text-destructive">*</span>
+            </Label>
+            <Select value={form.planId} onValueChange={(value) => onFormChange({ planId: value })}>
+              <SelectTrigger className="h-10 w-full" aria-invalid={Boolean(errors.planId)}>
+                <SelectValue placeholder="Select a commission plan…" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {plans.map((plan) => (
+                    <SelectItem key={plan.id} value={plan.id}>
+                      <span className="font-medium">{plan.name}</span>
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        {plan.type === "standard" ? `${plan.agentSplit}/${plan.teamSplit}` : "Tiered"}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+            {errors.planId && <p className="text-xs text-destructive">{errors.planId}</p>}
+          </div>
+
+          {/* Default Fees */}
+          <div className="flex flex-col gap-2">
+            <Label className="text-sm font-medium">Default Fees</Label>
+            {form.feeIds.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {form.feeIds.map((feeId) => {
+                  const fee = fees.find((f) => f.id === feeId);
+                  return fee ? (
+                    <Badge key={feeId} variant="secondary" className="gap-1 pr-1.5">
+                      {fee.name}
+                      <button
+                        type="button"
+                        aria-label={`Remove ${fee.name}`}
+                        className="ml-0.5 rounded-full opacity-60 hover:opacity-100"
+                        onClick={() => toggleFee(feeId)}
+                      >
+                        <X className="size-3" />
+                      </button>
+                    </Badge>
+                  ) : null;
+                })}
+              </div>
+            )}
+            <Card className="gap-0 overflow-hidden rounded-lg shadow-none">
+              <Command>
+                <CommandInput placeholder="Search fees…" />
+                <CommandList className="max-h-[160px]">
+                  <CommandEmpty>No fees found.</CommandEmpty>
+                  <CommandGroup>
+                    {fees.map((fee) => (
+                      <CommandItem
+                        key={fee.id}
+                        value={fee.name}
+                        onSelect={() => toggleFee(fee.id)}
+                        className="gap-3"
+                      >
+                        <Checkbox checked={form.feeIds.includes(fee.id)} />
+                        <span className="flex-1 text-sm">{fee.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {fee.type === "flat" ? `$${fee.amount}` : `${fee.amount}%`}
+                        </span>
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </Card>
+          </div>
+
+          {/* Assign To */}
+          <div className="flex flex-col gap-2">
+            <Label className="text-sm font-medium">Assign To</Label>
+            <RadioGroup
+              value={form.assignMode}
+              onValueChange={(value) => onFormChange({ assignMode: value as "all" | "specific" })}
+              className="flex flex-col gap-2"
+            >
+              <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-3">
+                <RadioGroupItem value="specific" className="mt-0.5" />
+                <span className="text-sm font-medium leading-5">Specific agents</span>
+              </label>
+              <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-3">
+                <RadioGroupItem value="all" className="mt-0.5" />
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-sm font-medium leading-5">All team members</span>
+                  <span className="text-xs text-muted-foreground">
+                    Applies to all current team members for new CDA calculations.
+                  </span>
+                </div>
+              </label>
+            </RadioGroup>
+            {form.assignMode === "specific" && (
+              <>
+                <AgentSelector
+                  selectedAgentIds={form.selectedAgentIds}
+                  onChange={(selectedAgentIds) => onFormChange({ selectedAgentIds })}
+                />
+                {errors.selectedAgentIds && (
+                  <p className="text-xs text-destructive">{errors.selectedAgentIds}</p>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Active Deals */}
+          <div className="flex items-start justify-between gap-4 rounded-md border px-4 py-3">
+            <div className="space-y-0.5">
+              <Label htmlFor="active-deals" className="text-sm font-medium">Apply to under contract deals</Label>
+              <p className="text-xs text-muted-foreground">
+                Recalculates CDA forecasts for active transactions.
+              </p>
             </div>
-          </label>
-          <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-3">
-            <RadioGroupItem value="specific" className="mt-0.5" />
-            <span className="text-sm font-medium leading-5">Specific agents</span>
-          </label>
-        </RadioGroup>
-      )}
-      {form.applyAsDefault && form.defaultMode === "specific" && (
-        <>
-          <AgentSelector
-            selectedAgentIds={form.selectedAgentIds}
-            onChange={(selectedAgentIds) => onFormChange({ selectedAgentIds })}
-          />
-          {errors.selectedAgentIds && <p className="text-xs text-destructive">{errors.selectedAgentIds}</p>}
-        </>
-      )}
-    </div>
+            <Switch
+              id="active-deals"
+              checked={form.applyToActiveDeals}
+              onCheckedChange={(checked) => onFormChange({ applyToActiveDeals: checked })}
+            />
+          </div>
+        </div>
+
+        <DialogFooter className="!flex !flex-row !items-center !justify-end !gap-3 shrink-0 border-t bg-background px-6 py-4">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={onSave} disabled={!isValid}>Assign Defaults</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -948,16 +1097,6 @@ function AddPlanDialog({
 }) {
   const splitTotal = numericValue(form.agentSplit) + numericValue(form.teamSplit);
   const feeLabel = form.feeType === "flat" ? "Flat Fee" : "Fee Percentage";
-  const [planSetupExpanded, setPlanSetupExpanded] = useState(!form.applyAsDefault);
-  const saveLabel = form.applyAsDefault ? "Save & Assign" : "Save Plan";
-
-  useEffect(() => {
-    if (form.applyAsDefault) {
-      setPlanSetupExpanded(false);
-    } else {
-      setPlanSetupExpanded(true);
-    }
-  }, [form.applyAsDefault, open]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -975,57 +1114,22 @@ function AddPlanDialog({
           </button>
         </DialogHeader>
         <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
-          {form.applyAsDefault ? (
-            <>
-              <PlanSetupSummaryCard
-                form={form}
-                expanded={planSetupExpanded}
-                onEdit={() => setPlanSetupExpanded(true)}
-                onExpandToggle={() => setPlanSetupExpanded((current) => !current)}
-              />
-              {planSetupExpanded && (
-                <PlanSetupFields
-                  form={form}
-                  errors={errors}
-                  feeLabel={feeLabel}
-                  splitTotal={splitTotal}
-                  onFormChange={onFormChange}
-                  onAgentSplitChange={onAgentSplitChange}
-                  onTeamSplitChange={onTeamSplitChange}
-                  onUpdateTier={onUpdateTier}
-                  onAddTier={onAddTier}
-                  onRemoveTier={onRemoveTier}
-                />
-              )}
-            </>
-          ) : (
-            <PlanSetupFields
-              form={form}
-              errors={errors}
-              feeLabel={feeLabel}
-              splitTotal={splitTotal}
-              onFormChange={onFormChange}
-              onAgentSplitChange={onAgentSplitChange}
-              onTeamSplitChange={onTeamSplitChange}
-              onUpdateTier={onUpdateTier}
-              onAddTier={onAddTier}
-              onRemoveTier={onRemoveTier}
-            />
-          )}
-          <Separator />
-          <DefaultAssignmentSection
+          <PlanSetupFields
             form={form}
             errors={errors}
+            feeLabel={feeLabel}
+            splitTotal={splitTotal}
             onFormChange={onFormChange}
-            onApplyDefaultToggle={(checked) => {
-              onFormChange({ applyAsDefault: checked });
-              if (checked) setPlanSetupExpanded(false);
-            }}
+            onAgentSplitChange={onAgentSplitChange}
+            onTeamSplitChange={onTeamSplitChange}
+            onUpdateTier={onUpdateTier}
+            onAddTier={onAddTier}
+            onRemoveTier={onRemoveTier}
           />
         </div>
         <DialogFooter className="!flex !flex-row !items-center !justify-end !gap-3 shrink-0 border-t bg-background px-6 py-4">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={onSave}>{saveLabel}</Button>
+          <Button onClick={onSave}>Save Plan</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -1043,16 +1147,20 @@ export function CDASettings() {
     overwriteOpen: boolean;
     fees: FeeRecord[];
     feeDraft: Partial<FeeTypeDraft>;
+    assignDefaultsForm: AssignDefaultsForm;
+    assignDefaultsErrors: AssignDefaultsErrors;
   }>({
-    plans: [],
+    plans: seedPlans,
     activePlanId: null,
     activeDialog: null,
     form: getFreshPlanForm(),
     errors: {},
     pendingPlan: null,
     overwriteOpen: false,
-    fees: [],
+    fees: seedFees,
     feeDraft: {},
+    assignDefaultsForm: getFreshAssignDefaultsForm(),
+    assignDefaultsErrors: {},
   });
 
   const selectedDefaultAgents = useMemo(() => {
@@ -1063,6 +1171,32 @@ export function CDASettings() {
 
   function closeDialog() {
     setState((current) => ({ ...current, activeDialog: null }));
+  }
+
+  function updateAssignDefaultsForm(patch: Partial<AssignDefaultsForm>) {
+    setState((current) => ({
+      ...current,
+      assignDefaultsForm: { ...current.assignDefaultsForm, ...patch },
+    }));
+  }
+
+  function handleSaveAssignDefaults() {
+    const errs: AssignDefaultsErrors = {};
+    if (!state.assignDefaultsForm.planId) errs.planId = "Commission plan required";
+    if (state.assignDefaultsForm.assignMode === "specific" && state.assignDefaultsForm.selectedAgentIds.length === 0) {
+      errs.selectedAgentIds = "Select at least one agent";
+    }
+    if (Object.keys(errs).length > 0) {
+      setState((current) => ({ ...current, assignDefaultsErrors: errs }));
+      return;
+    }
+    setState((current) => ({
+      ...current,
+      activeDialog: null,
+      assignDefaultsForm: getFreshAssignDefaultsForm(),
+      assignDefaultsErrors: {},
+    }));
+    toast("Defaults assigned");
   }
 
   function updateForm(patch: Partial<PlanForm>) {
@@ -1256,31 +1390,9 @@ export function CDASettings() {
   function assignDefaults(plan: CommissionPlan) {
     setState((current) => ({
       ...current,
-      activeDialog: "add-plan",
-      activePlanId: plan.id,
-      errors: {},
-      form: {
-        ...getFreshPlanForm(),
-        editingPlanId: plan.id,
-        planName: plan.name,
-        planType: plan.type,
-        agentSplit: String(plan.agentSplit),
-        teamSplit: String(plan.teamSplit),
-        feeType: plan.feeType,
-        feeAmount: String(plan.feeAmount),
-        capAmount: String(plan.capAmount),
-        resetPeriod: plan.resetPeriod,
-        basedOn: plan.basedOn,
-        dealTypes: {
-          buyer: plan.dealTypes.includes("Buyer"),
-          seller: plan.dealTypes.includes("Seller"),
-          lease: plan.dealTypes.includes("Lease"),
-          landlord: plan.dealTypes.includes("Landlord"),
-        },
-        applyAsDefault: true,
-        defaultMode: "specific",
-        tiers: plan.tiers.map((tier) => ({ ...tier })),
-      },
+      activeDialog: "assign-defaults",
+      assignDefaultsForm: { ...getFreshAssignDefaultsForm(), planId: plan.id },
+      assignDefaultsErrors: {},
     }));
   }
 
@@ -1541,7 +1653,7 @@ export function CDASettings() {
             emptyDescription="Assign commission plans and fee types to agents so CDA estimates are created automatically."
             icon={UserCheck}
             action="Add Defaults"
-            onAction={() => setState((current) => ({ ...current, activeDialog: "add-plan", form: { ...getFreshPlanForm(), applyAsDefault: true }, errors: {} }))}
+            onAction={() => setState((current) => ({ ...current, activeDialog: "assign-defaults", assignDefaultsForm: getFreshAssignDefaultsForm(), assignDefaultsErrors: {} }))}
           />
         </div>
       </main>
@@ -1565,6 +1677,17 @@ export function CDASettings() {
         initialData={state.feeDraft}
         onOpenChange={(open) => setState((current) => ({ ...current, activeDialog: open ? "add-fee" : null }))}
         onSave={saveFeeType}
+      />
+
+      <AssignDefaultsDialog
+        open={state.activeDialog === "assign-defaults"}
+        form={state.assignDefaultsForm}
+        errors={state.assignDefaultsErrors}
+        plans={state.plans}
+        fees={state.fees}
+        onFormChange={updateAssignDefaultsForm}
+        onOpenChange={(open) => setState((current) => ({ ...current, activeDialog: open ? "assign-defaults" : null }))}
+        onSave={handleSaveAssignDefaults}
       />
 
       <AlertDialog
