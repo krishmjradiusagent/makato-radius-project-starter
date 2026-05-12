@@ -79,7 +79,7 @@ import { Separator } from "../components/ui/separator";
 import { Switch } from "../components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { Toaster } from "../components/ui/sonner";
-import { FeeBuilderModal } from "../components/finance/fee-builder-modal";
+import { FeeBuilderModal, type FeeTypeDraft } from "../components/finance/fee-builder-modal";
 
 type PlanType = "standard" | "tiered";
 type FeeType = "flat" | "percentage";
@@ -119,6 +119,8 @@ type CommissionPlan = {
   basedOn: BasedOn;
   tiers: TierRow[];
 };
+
+type FeeRecord = FeeTypeDraft & { id: string };
 
 type PlanForm = {
   editingPlanId: string | null;
@@ -1041,6 +1043,8 @@ export function CDASettings() {
     errors: PlanErrors;
     pendingPlan: CommissionPlan | null;
     overwriteOpen: boolean;
+    fees: FeeRecord[];
+    feeDraft: Partial<FeeTypeDraft>;
   }>({
     plans: [],
     activePlanId: null,
@@ -1049,6 +1053,8 @@ export function CDASettings() {
     errors: {},
     pendingPlan: null,
     overwriteOpen: false,
+    fees: [],
+    feeDraft: {},
   });
 
   const selectedDefaultAgents = useMemo(() => {
@@ -1339,6 +1345,120 @@ export function CDASettings() {
     );
   }
 
+  function saveFeeType(data: FeeTypeDraft) {
+    const feeId = data.id ?? crypto.randomUUID();
+    const fee: FeeRecord = { ...data, id: feeId };
+    const exists = state.fees.some((item) => item.id === feeId);
+    setState((current) => ({
+      ...current,
+      fees: exists
+        ? current.fees.map((item) => (item.id === feeId ? fee : item))
+        : [...current.fees, fee],
+      feeDraft: {},
+    }));
+
+    toast(fee.appliesToMode === "agents" ? "Fee type added and applied" : "Fee type added");
+  }
+
+  function duplicateFee(fee: FeeRecord) {
+    setState((current) => ({
+      ...current,
+      activeDialog: "add-fee",
+      feeDraft: {
+        ...fee,
+        id: null,
+        step: 1,
+        name: `Copy of ${fee.name}`,
+      },
+    }));
+  }
+
+  function editFee(fee: FeeRecord) {
+    setState((current) => ({
+      ...current,
+      activeDialog: "add-fee",
+      feeDraft: {
+        ...fee,
+        step: fee.appliesToMode === "agents" ? 2 : 1,
+      },
+    }));
+  }
+
+  function renderFeeTypes() {
+    if (state.fees.length === 0) {
+      return (
+        <EmptySection
+          title="Fee Types"
+          description="Define reusable deductions for CDA calculations."
+          emptyDescription="Create reusable deductions such as TC Fee, RM Fee, E&O Fee, or Compliance Review."
+          icon={DollarSign}
+          action="Add Fee"
+          onAction={() => setState((current) => ({ ...current, activeDialog: "add-fee", feeDraft: {} }))}
+        />
+      );
+    }
+
+    return (
+      <section className="flex flex-col gap-4">
+        <div className="flex items-end justify-between">
+          <div>
+            <h2 className="text-base font-medium leading-6 text-foreground">Fee Types</h2>
+            <p className="mt-1 text-xs text-muted-foreground">Define reusable deductions for CDA calculations.</p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-primary text-primary hover:text-primary"
+            onClick={() => setState((current) => ({ ...current, activeDialog: "add-fee", feeDraft: {} }))}
+          >
+            <Plus className="size-4" />
+            Add Fee
+          </Button>
+        </div>
+        <Card className="rounded-[14px] border-border shadow-none">
+          <CardContent className="px-0 pb-0 [&:last-child]:pb-0">
+            {state.fees.map((fee) => (
+              <div key={fee.id} className="flex min-h-[66px] items-center justify-between border-b px-6 py-3 last:border-b-0">
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium">{fee.name}</p>
+                    <Badge variant="secondary">{fee.type === "flat" ? "Flat" : "Percentage"}</Badge>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+                    <span>{fee.type === "flat" ? `$${fee.amount} flat` : `${fee.amount}%`}</span>
+                    <span>{fee.timing === "pre-split" ? "Pre-Split" : "Post-Split"}</span>
+                    <span>
+                      Applies to: {fee.appliesToMode === "team" ? "Team" : `${fee.agentIds.length} agents`}
+                    </span>
+                  </div>
+                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="size-8">
+                      <MoreVertical className="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-[160px]">
+                    <DropdownMenuGroup>
+                      <DropdownMenuItem onClick={() => editFee(fee)}>
+                        <Edit3 className="size-4" />
+                        Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => duplicateFee(fee)}>
+                        <Copy className="size-4" />
+                        Duplicate
+                      </DropdownMenuItem>
+                    </DropdownMenuGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </section>
+    );
+  }
+
   const tabs = [
     "Accounts",
     "Billing",
@@ -1416,14 +1536,7 @@ export function CDASettings() {
 
         <div className="flex flex-col gap-8 px-4 py-9">
           {renderCommissionPlans()}
-          <EmptySection
-            title="Fee Types"
-            description="Define reusable deductions for CDA calculations."
-            emptyDescription="Create reusable deductions such as TC Fee, RM Fee, E&O Fee, or Compliance Review."
-            icon={DollarSign}
-            action="Add Fee"
-            onAction={() => setState((current) => ({ ...current, activeDialog: "add-fee" }))}
-          />
+          {renderFeeTypes()}
           <EmptySection
             title="Default Assignments"
             description="Connect plans and fees to agents so new CDA estimates use the right calculation rules."
@@ -1451,23 +1564,9 @@ export function CDASettings() {
 
       <FeeBuilderModal
         open={state.activeDialog === "add-fee"}
-        initialData={{
-          id: null,
-          name: "",
-          type: "flat",
-          amount: "",
-          appliesToMode: "team",
-          agentIds: [],
-          timing: "post-split",
-          slidingScale: false,
-          tiers: [],
-          contributesToCap: false,
-        }}
+        initialData={state.feeDraft}
         onOpenChange={(open) => setState((current) => ({ ...current, activeDialog: open ? "add-fee" : null }))}
-        onSave={() => {
-          closeDialog();
-          toast("Fee type added");
-        }}
+        onSave={saveFeeType}
       />
 
       <AlertDialog

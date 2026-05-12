@@ -1,54 +1,27 @@
 # Decisions
 
-Use this for locked project decisions.
+This file tracks architectural and product decisions made during development.
 
-Decisions override summaries.
+---
 
-### 2026-05-08 — Tag Sheet Behavior
+## Date: 2024-05-10
+### Decision: Dedicated Bottom Sheet for Tags
+- **Context**: Agent profile tags need management.
+- **Decision**: Use a dedicated bottom sheet (`Sheet`) instead of inline editing.
+- **Rationale**: Better UX on mobile and more space for tag search/selection.
+- **Status**: Final
 
-Decision:
-- Tags are managed from a dedicated bottom sheet, not inline on the client page.
-- Users can search existing tags, create a new tag from the search field, edit a tag name, and delete a tag with confirmation.
-- Tags behave as a shared master list across clients, while each client keeps its own selected tag set.
-- Tapping a tag toggles selection on and off.
-- Creating a tag trims whitespace, requires a non-empty unique name, and auto-selects the new tag for the current client.
-- Deleting a tag removes it from the master list and from any selected client state.
+---
 
-Reason:
-- This keeps tag management consistent, fast, and easy to reason about for both browsing and editing.
+## Date: 2026-05-12
+### Decision: Custom Toast Notification System
+- **Context**: Need to provide user feedback for actions like "Save Assignments" without adding external dependencies.
+- **Decision**: Implemented a lightweight, Vanilla JS toast system that injects DOM elements into a fixed container.
+- **Rationale**: Maintains the single-file goal and zero-build requirement while providing modern UX.
+- **Status**: Final
 
-Applies To:
-- Client profile tag management
-- Tag creation, selection, edit, and delete flows
-
-Impact:
-- The UI can rely on one canonical tag model and one canonical bottom-sheet interaction pattern.
-- Future tag work should preserve the shared-master-list behavior and selection toggle behavior.
-
-Status:
-Final
-
-Owner:
-unknown
-
-## Template
-
-### YYYY-MM-DD — Decision Title
-
-Decision:
--
-
-Reason:
--
-
-Applies To:
--
-
-Impact:
--
-
-Status:
-Proposed | Final | Reversed
-
-Owner:
-unknown
+### Decision: Centralized Agent State
+- **Context**: Multiple panels (Agent List, Settings, Summary, Modal) need to stay in sync.
+- **Decision**: Use a global `agents` array as the source of truth and re-render components on change.
+- **Rationale**: Simplest way to ensure data consistency in a non-reactive Vanilla JS environment without a state management library.
+- **Status**: Final
