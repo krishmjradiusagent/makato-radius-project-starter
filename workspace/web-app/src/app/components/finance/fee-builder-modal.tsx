@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Loader2, Plus, X } from "lucide-react";
 import {
   Dialog,
@@ -14,17 +14,6 @@ import { Label } from "../ui/label";
 import { Switch } from "../ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card";
-import { Checkbox } from "../ui/checkbox";
-import { Badge } from "../ui/badge";
-import { Avatar, AvatarFallback } from "../ui/avatar";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "../ui/command";
 import { ScrollArea } from "../ui/scroll-area";
 
 export type FeeTier = {
@@ -58,6 +47,7 @@ const agents = [
 
 export interface FeeBuilderModalProps {
   open: boolean;
+  title: string;
   onOpenChange: (open: boolean) => void;
   initialData?: Partial<FeeTypeDraft>;
   onSave: (data: FeeTypeDraft) => void;
@@ -204,6 +194,7 @@ function TierRows({
 
 export function FeeBuilderModal({
   open,
+  title,
   onOpenChange,
   initialData,
   onSave,
@@ -211,11 +202,6 @@ export function FeeBuilderModal({
   const [draft, setDraft] = useState<FeeTypeDraft>(() => createDraft(initialData));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-
-  const selectedAgents = useMemo(
-    () => agents.filter((agent) => draft.agentIds.includes(agent.id)),
-    [draft.agentIds],
-  );
 
   useEffect(() => {
     if (!open) return;
@@ -229,15 +215,6 @@ export function FeeBuilderModal({
     setErrors((prev) => ({ ...prev, [field]: "" }));
   }
 
-  function toggleAgent(agentId: string) {
-    updateField(
-      "agentIds",
-      draft.agentIds.includes(agentId)
-        ? draft.agentIds.filter((id) => id !== agentId)
-        : [...draft.agentIds, agentId],
-    );
-  }
-
   function validate() {
     const nextErrors: Record<string, string> = {};
     if (!draft.name.trim()) nextErrors.name = "Fee name required";
@@ -245,9 +222,6 @@ export function FeeBuilderModal({
     if (draft.slidingScale) {
       const invalidTier = draft.tiers.find((tier) => !tier.from || numericValue(tier.fee) <= 0);
       if (invalidTier) nextErrors.tiers = "Complete all tier rows";
-    }
-    if (draft.appliesToMode === "agents" && draft.agentIds.length === 0) {
-      nextErrors.agentIds = "Select at least one agent";
     }
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
@@ -267,8 +241,8 @@ export function FeeBuilderModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-[82vh] w-[600px] max-w-[calc(100vw-48px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[600px]">
         <DialogHeader className="border-b px-6 pb-4 pt-5">
-          <DialogTitle>Add Fee Type</DialogTitle>
-          <DialogDescription>Configure fee details and agent assignment.</DialogDescription>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>Configure fee type details.</DialogDescription>
         </DialogHeader>
 
         <ScrollArea className="min-h-0 flex-1">
@@ -322,22 +296,6 @@ export function FeeBuilderModal({
                   </Tabs>
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label>Applies To</Label>
-                  <Tabs
-                    value={draft.appliesToMode}
-                    onValueChange={(value) => updateField("appliesToMode", value as FeeTypeDraft["appliesToMode"])}
-                  >
-                    <TabsList className="grid h-10 w-full grid-cols-2">
-                      <TabsTrigger value="team">Team</TabsTrigger>
-                      <TabsTrigger value="agents">Agents</TabsTrigger>
-                    </TabsList>
-                  </Tabs>
-                  <p className="text-xs text-muted-foreground">
-                    {draft.appliesToMode === "team" ? "Applies to all team members." : "Select specific agents below."}
-                  </p>
-                </div>
-
                 <div className="flex items-center justify-between rounded-md border px-3 py-2.5">
                   <div className="space-y-0.5">
                     <Label htmlFor="sliding-scale" className="text-sm">Sliding Scale</Label>
@@ -378,77 +336,6 @@ export function FeeBuilderModal({
               </Card>
             ) : null}
 
-            {/* Assign Agents — only shown when Agents selected */}
-            {draft.appliesToMode === "agents" ? (
-              <Card className="shadow-none">
-                <CardHeader className="pb-2 pt-4 px-4">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm font-medium">Assign Agents</CardTitle>
-                    <Badge variant="secondary">{draft.agentIds.length}</Badge>
-                  </div>
-                  <CardDescription className="text-xs">Choose agents this fee applies to.</CardDescription>
-                </CardHeader>
-                <CardContent className="px-4 pb-4 space-y-2">
-                  {selectedAgents.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {selectedAgents.map((agent) => (
-                        <Badge key={agent.id} variant="secondary" className="gap-1.5 pr-1.5 transition-opacity duration-200">
-                          {agent.name}
-                          <button
-                            type="button"
-                            aria-label={`Remove ${agent.name}`}
-                            className="inline-flex size-4 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
-                            onClick={() => toggleAgent(agent.id)}
-                          >
-                            <X className="size-3" />
-                          </button>
-                        </Badge>
-                      ))}
-                    </div>
-                  ) : null}
-
-                  <div className="rounded-md border overflow-hidden">
-                    <Command>
-                      <CommandInput placeholder="Search agents..." />
-                      <CommandList className="max-h-[220px]">
-                        <CommandEmpty>No agents found.</CommandEmpty>
-                        <CommandGroup>
-                          {agents.map((agent) => {
-                            const selected = draft.agentIds.includes(agent.id);
-                            return (
-                              <CommandItem
-                                key={agent.id}
-                                value={`${agent.name} ${agent.email} ${agent.role}`}
-                                onSelect={() => toggleAgent(agent.id)}
-                                className={`gap-3 py-2 transition-colors ${selected ? "bg-primary/5" : ""}`}
-                              >
-                                <Checkbox checked={selected} />
-                                <Avatar className="size-8">
-                                  <AvatarFallback className="text-xs">
-                                    {agent.name
-                                      .split(" ")
-                                      .map((part) => part[0])
-                                      .join("")}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <div className="flex min-w-0 flex-1 flex-col">
-                                  <span className="truncate text-sm font-medium">{agent.name}</span>
-                                  <span className="truncate text-xs text-muted-foreground">{agent.email}</span>
-                                </div>
-                                <Badge variant="outline" className="flex-shrink-0 text-xs">
-                                  {agent.role}
-                                </Badge>
-                              </CommandItem>
-                            );
-                          })}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </div>
-                  {errors.agentIds ? <p className="text-xs text-destructive">{errors.agentIds}</p> : null}
-                </CardContent>
-              </Card>
-            ) : null}
           </div>
         </ScrollArea>
 

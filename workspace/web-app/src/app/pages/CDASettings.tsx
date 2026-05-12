@@ -1,15 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Archive,
   Bell,
   Briefcase,
   Building2,
+  ChevronDown,
   Copy,
   DollarSign,
   Edit3,
   FileText,
   Gift,
-  History,
   HelpCircle,
   Megaphone,
   MoreVertical,
@@ -20,7 +20,6 @@ import {
   Trash2,
   X,
   UserCheck,
-  UserPlus,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -41,14 +40,6 @@ import { Button } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
 import { Checkbox } from "../components/ui/checkbox";
 import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "../components/ui/command";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -66,7 +57,6 @@ import {
 } from "../components/ui/dropdown-menu";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
-import { RadioGroup, RadioGroupItem } from "../components/ui/radio-group";
 import {
   Select,
   SelectContent,
@@ -86,6 +76,7 @@ type FeeType = "flat" | "percentage";
 type ResetPeriod = "yearly" | "quarterly" | "monthly";
 type BasedOn = "units" | "gci" | "sales-volume";
 type DefaultMode = "all" | "specific";
+type DialogMode = "add" | "edit";
 type DialogName = "add-plan" | "add-fee" | "assign-defaults" | null;
 
 type AssignDefaultsForm = {
@@ -97,6 +88,24 @@ type AssignDefaultsForm = {
 };
 
 type AssignDefaultsErrors = Partial<Record<"planId" | "selectedAgentIds", string>>;
+
+type AssignDefaultsSource =
+  | { from: "plan"; planId: string }
+  | { from: "fee"; feeId: string }
+  | { from: "agent"; agentId: string }
+  | { from: "bulk" };
+
+type AgentAssignment = {
+  id: string;
+  agentId: string;
+  planId: string | null;
+  feeIds: string[];
+  applyToActiveDeals: boolean;
+};
+
+type ArchiveTarget = { type: "plan" | "fee"; id: string; name: string };
+
+type DuplicateTarget = { type: "plan"; plan: CommissionPlan } | { type: "fee"; fee: FeeRecord };
 
 type Agent = {
   id: string;
@@ -186,6 +195,13 @@ const seedFees: FeeRecord[] = [
   { id: "fee-seed-4", name: "Compliance Review", type: "flat", amount: "250", timing: "pre-split", appliesToMode: "team", agentIds: [], slidingScale: false, contributesToCap: false, tiers: [] },
   { id: "fee-seed-5", name: "Broker Admin Fee", type: "percentage", amount: "2", timing: "post-split", appliesToMode: "team", agentIds: [], slidingScale: false, contributesToCap: true, tiers: [] },
   { id: "fee-seed-6", name: "Sliding Scale Team Fee", type: "percentage", amount: "3", timing: "post-split", appliesToMode: "team", agentIds: [], slidingScale: true, contributesToCap: false, tiers: [] },
+];
+
+const seedAssignments: AgentAssignment[] = [
+  { id: "assign-1", agentId: "ila", planId: "plan-seed-1", feeIds: ["fee-seed-1", "fee-seed-2", "fee-seed-3"], applyToActiveDeals: false },
+  { id: "assign-2", agentId: "michael", planId: "plan-seed-2", feeIds: ["fee-seed-1"], applyToActiveDeals: false },
+  { id: "assign-3", agentId: "rod", planId: null, feeIds: [], applyToActiveDeals: false },
+  { id: "assign-4", agentId: "vanessa", planId: "plan-seed-1", feeIds: ["fee-seed-1", "fee-seed-3"], applyToActiveDeals: false },
 ];
 
 function getFreshAssignDefaultsForm(): AssignDefaultsForm {
@@ -362,17 +378,15 @@ function AdornedInput({
 function CommissionPlanCard({
   plan,
   onEdit,
+  onAssign,
   onDuplicate,
-  onAssignDefaults,
-  onVersionHistory,
-  onDelete,
+  onArchive,
 }: {
   plan: CommissionPlan;
   onEdit: (plan: CommissionPlan) => void;
+  onAssign: (plan: CommissionPlan) => void;
   onDuplicate: (plan: CommissionPlan) => void;
-  onAssignDefaults: (plan: CommissionPlan) => void;
-  onVersionHistory: (plan: CommissionPlan) => void;
-  onDelete: (planId: string) => void;
+  onArchive: (plan: CommissionPlan) => void;
 }) {
   return (
     <div className="flex min-h-[66px] items-center justify-between border-b px-6 py-3 last:border-b-0">
@@ -405,32 +419,34 @@ function CommissionPlanCard({
       </div>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" aria-label={`${plan.name} menu`} className="size-8">
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={`${plan.name} menu`}
+            className="size-8"
+            onClick={(event) => event.stopPropagation()}
+          >
             <MoreVertical className="size-4" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-[180px]">
+        <DropdownMenuContent align="end" sideOffset={8} className="w-[170px]">
           <DropdownMenuGroup>
             <DropdownMenuItem onClick={() => onEdit(plan)}>
               <Edit3 className="size-4" />
               Edit
             </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onAssign(plan)}>
+              <UserCheck className="size-4" />
+              Assign
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => onDuplicate(plan)}>
               <Copy className="size-4" />
               Duplicate
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onAssignDefaults(plan)}>
-              <UserPlus className="size-4" />
-              Assign Defaults
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onVersionHistory(plan)}>
-              <History className="size-4" />
-              Version History
-            </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive" onClick={() => onDelete(plan.id)}>
-              <Trash2 className="size-4" />
-              Delete
+            <DropdownMenuItem variant="destructive" onClick={() => onArchive(plan)}>
+              <Archive className="size-4" />
+              Archive
             </DropdownMenuItem>
           </DropdownMenuGroup>
         </DropdownMenuContent>
@@ -439,16 +455,21 @@ function CommissionPlanCard({
   );
 }
 
-function AgentSelector({
+function AgentMultiSelect({
   selectedAgentIds,
+  lockedAgentId,
   onChange,
 }: {
   selectedAgentIds: string[];
+  lockedAgentId?: string;
   onChange: (ids: string[]) => void;
 }) {
-  const selectedAgents = agents.filter((agent) => selectedAgentIds.includes(agent.id));
+  const [search, setSearch] = useState("");
+  const [open, setOpen] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
 
-  function toggleAgent(agentId: string) {
+  function toggle(agentId: string) {
+    if (agentId === lockedAgentId) return;
     onChange(
       selectedAgentIds.includes(agentId)
         ? selectedAgentIds.filter((id) => id !== agentId)
@@ -456,55 +477,189 @@ function AgentSelector({
     );
   }
 
+  const filtered = agents.filter((a) =>
+    `${a.name} ${a.email} ${a.role}`.toLowerCase().includes(search.toLowerCase()),
+  );
+  const selected = agents.filter((a) => selectedAgentIds.includes(a.id));
+
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center justify-between">
-        <Label>Specific agents</Label>
-        <span className="text-xs text-muted-foreground">{selectedAgentIds.length} selected</span>
-      </div>
-      {selectedAgents.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {selectedAgents.map((agent) => (
-            <Badge key={agent.id} variant="secondary">
+      <DropdownMenu open={open} onOpenChange={setOpen}>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" className="h-10 w-full justify-between font-normal">
+            <span className="text-muted-foreground text-sm">Select agents</span>
+            <div className="flex items-center gap-1.5">
+              <Badge variant={selectedAgentIds.length > 0 ? "secondary" : "outline"} className="h-5 px-1.5 text-xs">
+                {selectedAgentIds.length}
+              </Badge>
+              <ChevronDown className="size-4 text-muted-foreground" />
+            </div>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          className="min-w-[var(--radix-dropdown-menu-trigger-width)] p-0"
+          align="start"
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            window.requestAnimationFrame(() => searchRef.current?.focus());
+          }}
+        >
+          <div className="p-2">
+            <Input
+              ref={searchRef}
+              placeholder="Search agents…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-8"
+              onKeyDown={(e) => e.stopPropagation()}
+            />
+          </div>
+          <DropdownMenuSeparator className="my-0" />
+          {filtered.map((agent) => (
+            <DropdownMenuItem
+              key={agent.id}
+              onSelect={(e) => e.preventDefault()}
+              onClick={() => toggle(agent.id)}
+              disabled={agent.id === lockedAgentId}
+              className="gap-3 cursor-pointer"
+            >
+              <Checkbox checked={selectedAgentIds.includes(agent.id)} className="pointer-events-none" />
+              <Avatar className="size-7 shrink-0">
+                <AvatarFallback className="text-xs">
+                  {agent.name.split(" ").map((p) => p[0]).join("")}
+                </AvatarFallback>
+              </Avatar>
+              <span className="flex-1 text-sm font-medium">{agent.name}</span>
+              <Badge variant="outline" className="shrink-0 text-xs">{agent.role}</Badge>
+            </DropdownMenuItem>
+          ))}
+          {filtered.length === 0 && (
+            <p className="py-3 text-center text-sm text-muted-foreground">No agents found</p>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {selected.map((agent) => (
+            <Badge key={agent.id} variant="secondary" className="gap-1 pr-1.5">
               {agent.name}
+              {agent.id !== lockedAgentId && (
+                <button
+                  type="button"
+                  aria-label={`Remove ${agent.name}`}
+                  className="ml-0.5 rounded-full opacity-60 hover:opacity-100"
+                  onClick={() => toggle(agent.id)}
+                >
+                  <X className="size-3" />
+                </button>
+              )}
             </Badge>
           ))}
         </div>
       )}
-      <Card className="gap-0 overflow-hidden rounded-lg shadow-none">
-        <Command>
-          <CommandInput placeholder="Search agents..." />
-          <CommandList className="max-h-[180px]">
-            <CommandEmpty>No agents found.</CommandEmpty>
-            <CommandGroup>
-              {agents.map((agent) => (
-                <CommandItem
-                  key={agent.id}
-                  value={`${agent.name} ${agent.email} ${agent.role}`}
-                  onSelect={() => toggleAgent(agent.id)}
-                  className="gap-3"
+    </div>
+  );
+}
+
+function FeeMultiSelect({
+  fees,
+  selectedFeeIds,
+  lockedFeeId,
+  onChange,
+}: {
+  fees: FeeRecord[];
+  selectedFeeIds: string[];
+  lockedFeeId?: string;
+  onChange: (ids: string[]) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const [open, setOpen] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  function toggle(feeId: string) {
+    if (feeId === lockedFeeId) return;
+    onChange(
+      selectedFeeIds.includes(feeId)
+        ? selectedFeeIds.filter((id) => id !== feeId)
+        : [...selectedFeeIds, feeId],
+    );
+  }
+
+  const filtered = fees.filter((f) => f.name.toLowerCase().includes(search.toLowerCase()));
+  const selected = fees.filter((f) => selectedFeeIds.includes(f.id));
+
+  return (
+    <div className="flex flex-col gap-2">
+      <DropdownMenu open={open} onOpenChange={setOpen}>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" className="h-10 w-full justify-between font-normal">
+            <span className="text-muted-foreground text-sm">Select fees</span>
+            <div className="flex items-center gap-1.5">
+              <Badge variant={selectedFeeIds.length > 0 ? "secondary" : "outline"} className="h-5 px-1.5 text-xs">
+                {selectedFeeIds.length}
+              </Badge>
+              <ChevronDown className="size-4 text-muted-foreground" />
+            </div>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          className="min-w-[var(--radix-dropdown-menu-trigger-width)] p-0"
+          align="start"
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            window.requestAnimationFrame(() => searchRef.current?.focus());
+          }}
+        >
+          <div className="p-2">
+            <Input
+              ref={searchRef}
+              placeholder="Search fees…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-8"
+              onKeyDown={(e) => e.stopPropagation()}
+            />
+          </div>
+          <DropdownMenuSeparator className="my-0" />
+          {filtered.map((fee) => (
+            <DropdownMenuItem
+              key={fee.id}
+              onSelect={(e) => e.preventDefault()}
+              onClick={() => toggle(fee.id)}
+              disabled={fee.id === lockedFeeId}
+              className="gap-3 cursor-pointer"
+            >
+              <Checkbox checked={selectedFeeIds.includes(fee.id)} className="pointer-events-none" />
+              <span className="flex-1 text-sm">{fee.name}</span>
+              <span className="text-xs text-muted-foreground">
+                {fee.type === "flat" ? `$${fee.amount}` : `${fee.amount}%`}
+              </span>
+            </DropdownMenuItem>
+          ))}
+          {filtered.length === 0 && (
+            <p className="py-3 text-center text-sm text-muted-foreground">No fees found</p>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {selected.map((fee) => (
+            <Badge key={fee.id} variant="secondary" className="gap-1 pr-1.5">
+              {fee.name}
+              {fee.id !== lockedFeeId && (
+                <button
+                  type="button"
+                  aria-label={`Remove ${fee.name}`}
+                  className="ml-0.5 rounded-full opacity-60 hover:opacity-100"
+                  onClick={() => toggle(fee.id)}
                 >
-                  <Checkbox checked={selectedAgentIds.includes(agent.id)} />
-                  <Avatar className="size-8">
-                    <AvatarFallback className="text-xs">
-                      {agent.name
-                        .split(" ")
-                        .map((part) => part[0])
-                        .join("")}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate text-sm font-medium">{agent.name}</span>
-                    <span className="truncate text-xs text-muted-foreground">{agent.email}</span>
-                  </div>
-                  <Badge variant="outline">{agent.role}</Badge>
-                  {agent.hasDefault && <Badge variant="secondary">Has default</Badge>}
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </Card>
+                  <X className="size-3" />
+                </button>
+              )}
+            </Badge>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -892,26 +1047,44 @@ function PlanSetupFields({
 
 function AssignDefaultsDialog({
   open,
+  source,
   form,
   errors,
   plans,
   fees,
+  isAssigning,
   onFormChange,
   onOpenChange,
   onSave,
 }: {
   open: boolean;
+  source: AssignDefaultsSource;
   form: AssignDefaultsForm;
   errors: AssignDefaultsErrors;
   plans: CommissionPlan[];
   fees: FeeRecord[];
+  isAssigning: boolean;
   onFormChange: (patch: Partial<AssignDefaultsForm>) => void;
   onOpenChange: (open: boolean) => void;
   onSave: () => void;
 }) {
-  const isValid = Boolean(form.planId) && (form.assignMode === "all" || form.selectedAgentIds.length > 0);
+  const lockedPlan = source.from === "plan" ? plans.find((p) => p.id === source.planId) : null;
+  const lockedFee = source.from === "fee" ? fees.find((f) => f.id === source.feeId) : null;
+  const lockedAgentId = source.from === "agent" ? source.agentId : undefined;
+  const lockedAgent = lockedAgentId ? agents.find((a) => a.id === lockedAgentId) : null;
+
+  const showPlanSelect = source.from !== "plan";
+  const showFeeSelect = source.from !== "fee";
+  const showAssignTo = source.from !== "agent";
+
+  const needsPlan = showPlanSelect;
+  const isValid =
+    (!needsPlan || Boolean(form.planId)) &&
+    (!showAssignTo || form.assignMode === "all" || form.selectedAgentIds.length > 0) &&
+    (showAssignTo || (lockedAgentId !== undefined));
 
   function toggleFee(feeId: string) {
+    if (source.from === "fee" && feeId === source.feeId) return;
     onFormChange({
       feeIds: form.feeIds.includes(feeId)
         ? form.feeIds.filter((id) => id !== feeId)
@@ -936,114 +1109,127 @@ function AssignDefaultsDialog({
         </DialogHeader>
 
         <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-6 py-5">
-          {/* Commission Plan */}
-          <div className="flex flex-col gap-2">
-            <Label className="text-sm font-medium">
-              Commission Plan <span className="text-destructive">*</span>
-            </Label>
-            <Select value={form.planId} onValueChange={(value) => onFormChange({ planId: value })}>
-              <SelectTrigger className="h-10 w-full" aria-invalid={Boolean(errors.planId)}>
-                <SelectValue placeholder="Select a commission plan…" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  {plans.map((plan) => (
-                    <SelectItem key={plan.id} value={plan.id}>
-                      <span className="font-medium">{plan.name}</span>
-                      <span className="ml-2 text-xs text-muted-foreground">
-                        {plan.type === "standard" ? `${plan.agentSplit}/${plan.teamSplit}` : "Tiered"}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-            {errors.planId && <p className="text-xs text-destructive">{errors.planId}</p>}
-          </div>
 
-          {/* Default Fees */}
-          <div className="flex flex-col gap-2">
-            <Label className="text-sm font-medium">Default Fees</Label>
-            {form.feeIds.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {form.feeIds.map((feeId) => {
-                  const fee = fees.find((f) => f.id === feeId);
-                  return fee ? (
-                    <Badge key={feeId} variant="secondary" className="gap-1 pr-1.5">
-                      {fee.name}
-                      <button
-                        type="button"
-                        aria-label={`Remove ${fee.name}`}
-                        className="ml-0.5 rounded-full opacity-60 hover:opacity-100"
-                        onClick={() => toggleFee(feeId)}
-                      >
-                        <X className="size-3" />
-                      </button>
-                    </Badge>
-                  ) : null;
-                })}
+          {/* Locked plan summary (Case 1) */}
+          {lockedPlan && (
+            <div className="flex flex-col gap-1.5 rounded-lg border bg-muted/40 px-4 py-3">
+              <div className="flex items-center gap-2">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Commission Plan</p>
+                <Badge variant="secondary" className="text-xs">Locked</Badge>
               </div>
-            )}
-            <Card className="gap-0 overflow-hidden rounded-lg shadow-none">
-              <Command>
-                <CommandInput placeholder="Search fees…" />
-                <CommandList className="max-h-[160px]">
-                  <CommandEmpty>No fees found.</CommandEmpty>
-                  <CommandGroup>
-                    {fees.map((fee) => (
-                      <CommandItem
-                        key={fee.id}
-                        value={fee.name}
-                        onSelect={() => toggleFee(fee.id)}
-                        className="gap-3"
-                      >
-                        <Checkbox checked={form.feeIds.includes(fee.id)} />
-                        <span className="flex-1 text-sm">{fee.name}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {fee.type === "flat" ? `$${fee.amount}` : `${fee.amount}%`}
-                        </span>
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </Card>
-          </div>
+              <p className="text-sm font-medium">{lockedPlan.name}</p>
+              <p className="text-xs text-muted-foreground">
+                {lockedPlan.type === "standard"
+                  ? `Agent ${lockedPlan.agentSplit}% / Team ${lockedPlan.teamSplit}% · Cap ${formatMoney(lockedPlan.capAmount)}`
+                  : `Tiered · ${lockedPlan.tiers.length} tiers`}
+              </p>
+            </div>
+          )}
 
-          {/* Assign To */}
-          <div className="flex flex-col gap-2">
-            <Label className="text-sm font-medium">Assign To</Label>
-            <RadioGroup
-              value={form.assignMode}
-              onValueChange={(value) => onFormChange({ assignMode: value as "all" | "specific" })}
-              className="flex flex-col gap-2"
-            >
-              <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-3">
-                <RadioGroupItem value="specific" className="mt-0.5" />
-                <span className="text-sm font-medium leading-5">Specific agents</span>
-              </label>
-              <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-3">
-                <RadioGroupItem value="all" className="mt-0.5" />
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-sm font-medium leading-5">All team members</span>
-                  <span className="text-xs text-muted-foreground">
-                    Applies to all current team members for new CDA calculations.
-                  </span>
-                </div>
-              </label>
-            </RadioGroup>
-            {form.assignMode === "specific" && (
-              <>
-                <AgentSelector
-                  selectedAgentIds={form.selectedAgentIds}
-                  onChange={(selectedAgentIds) => onFormChange({ selectedAgentIds })}
-                />
-                {errors.selectedAgentIds && (
-                  <p className="text-xs text-destructive">{errors.selectedAgentIds}</p>
-                )}
-              </>
-            )}
-          </div>
+          {/* Locked fee summary (Case 2) */}
+          {lockedFee && (
+            <div className="flex flex-col gap-1.5 rounded-lg border bg-muted/40 px-4 py-3">
+              <div className="flex items-center gap-2">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Fee Type</p>
+                <Badge variant="secondary" className="text-xs">Locked</Badge>
+              </div>
+              <p className="text-sm font-medium">{lockedFee.name}</p>
+              <p className="text-xs text-muted-foreground">
+                {lockedFee.type === "flat" ? `$${lockedFee.amount} flat` : `${lockedFee.amount}%`}
+                {" · "}
+                {lockedFee.timing === "pre-split" ? "Pre-split" : "Post-split"}
+              </p>
+            </div>
+          )}
+
+          {/* Locked agent summary (Case 3) */}
+          {lockedAgent && (
+            <div className="flex items-center gap-3 rounded-lg border bg-muted/40 px-4 py-3">
+              <Avatar className="size-8 shrink-0">
+                <AvatarFallback className="text-xs">
+                  {lockedAgent.name.split(" ").map((p) => p[0]).join("")}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium">{lockedAgent.name}</p>
+                <p className="text-xs text-muted-foreground">{lockedAgent.role}</p>
+              </div>
+              <Badge variant="secondary" className="text-xs shrink-0">Agent locked</Badge>
+            </div>
+          )}
+
+          {/* Commission Plan select (Cases 2, 3, 4) */}
+          {showPlanSelect && (
+            <div className="flex flex-col gap-2">
+              <Label className="text-sm font-medium">
+                Commission Plan <span className="text-destructive">*</span>
+              </Label>
+              <Select value={form.planId} onValueChange={(value) => onFormChange({ planId: value })}>
+                <SelectTrigger className="h-10 w-full" aria-invalid={Boolean(errors.planId)}>
+                  <SelectValue placeholder="Select a commission plan…" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {plans.map((plan) => (
+                      <SelectItem key={plan.id} value={plan.id}>
+                        <span className="font-medium">{plan.name}</span>
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          {plan.type === "standard" ? `${plan.agentSplit}/${plan.teamSplit}` : "Tiered"}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              {errors.planId && <p className="text-xs text-destructive">{errors.planId}</p>}
+            </div>
+          )}
+
+          {/* Default Fees multi-select (Cases 1, 3, 4) */}
+          {showFeeSelect && (
+            <div className="flex flex-col gap-2">
+              <Label className="text-sm font-medium">Default Fees</Label>
+              <FeeMultiSelect
+                fees={fees}
+                selectedFeeIds={form.feeIds}
+                lockedFeeId={source.from === "fee" ? source.feeId : undefined}
+                onChange={(feeIds) => onFormChange({ feeIds })}
+              />
+            </div>
+          )}
+
+          {/* Assignment controls (Cases 1, 2, 4) */}
+          {showAssignTo && (
+            <div className="flex flex-col gap-3">
+              <Label className="text-sm font-medium">Assign To</Label>
+              <Tabs
+                value={form.assignMode}
+                onValueChange={(value) => onFormChange({ assignMode: value as "all" | "specific" })}
+              >
+                <TabsList className="grid h-10 w-full grid-cols-2">
+                  <TabsTrigger value="specific">Specific agents</TabsTrigger>
+                  <TabsTrigger value="all">All agents</TabsTrigger>
+                </TabsList>
+              </Tabs>
+              {form.assignMode === "all" && (
+                <p className="text-xs text-muted-foreground">
+                  Applies to all current and future team members.
+                </p>
+              )}
+              {form.assignMode === "specific" && (
+                <>
+                  <AgentMultiSelect
+                    selectedAgentIds={form.selectedAgentIds}
+                    lockedAgentId={lockedAgentId}
+                    onChange={(selectedAgentIds) => onFormChange({ selectedAgentIds })}
+                  />
+                  {errors.selectedAgentIds && (
+                    <p className="text-xs text-destructive">{errors.selectedAgentIds}</p>
+                  )}
+                </>
+              )}
+            </div>
+          )}
 
           {/* Active Deals */}
           <div className="flex items-start justify-between gap-4 rounded-md border px-4 py-3">
@@ -1062,8 +1248,10 @@ function AssignDefaultsDialog({
         </div>
 
         <DialogFooter className="!flex !flex-row !items-center !justify-end !gap-3 shrink-0 border-t bg-background px-6 py-4">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={onSave} disabled={!isValid}>Assign Defaults</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isAssigning}>Cancel</Button>
+          <Button onClick={onSave} disabled={!isValid || isAssigning}>
+            {isAssigning ? "Assigning…" : "Assign Defaults"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -1072,6 +1260,7 @@ function AssignDefaultsDialog({
 
 function AddPlanDialog({
   open,
+  title,
   form,
   errors,
   onFormChange,
@@ -1084,6 +1273,7 @@ function AddPlanDialog({
   onSave,
 }: {
   open: boolean;
+  title: string;
   form: PlanForm;
   errors: PlanErrors;
   onFormChange: (patch: Partial<PlanForm>) => void;
@@ -1102,7 +1292,7 @@ function AddPlanDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="!flex !h-auto !max-h-[82vh] !w-[560px] !max-w-[calc(100vw-48px)] !flex-col !gap-0 !overflow-hidden !rounded-[12px] !p-0 sm:!max-w-[560px] [&>button[data-slot=dialog-close]]:hidden">
         <DialogHeader className="!flex !flex-row !items-start !justify-between !gap-4 border-b px-6 pt-6 pb-4 !text-left">
-          <DialogTitle className="whitespace-nowrap text-base font-semibold leading-5">Add Commission Plan</DialogTitle>
+          <DialogTitle className="whitespace-nowrap text-base font-semibold leading-5">{title}</DialogTitle>
           <DialogDescription className="sr-only">Create commission plan.</DialogDescription>
           <button
             type="button"
@@ -1136,31 +1326,167 @@ function AddPlanDialog({
   );
 }
 
+function DefaultAssignmentsTable({
+  assignments,
+  plans,
+  fees,
+  onEdit,
+  onPreview,
+  onDeals,
+  onClear,
+  onAddDefaults,
+}: {
+  assignments: AgentAssignment[];
+  plans: CommissionPlan[];
+  fees: FeeRecord[];
+  onEdit: (assignment: AgentAssignment) => void;
+  onPreview: (assignment: AgentAssignment) => void;
+  onDeals: (assignment: AgentAssignment) => void;
+  onClear: (assignment: AgentAssignment) => void;
+  onAddDefaults: () => void;
+}) {
+  return (
+    <section className="flex flex-col gap-4">
+      <div className="flex items-end justify-between">
+        <div>
+          <h2 className="text-base font-medium leading-6 text-foreground">Default Assignments</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Connect plans and fees to agents so new CDA estimates use the right calculation rules.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="border-primary text-primary hover:text-primary"
+          onClick={onAddDefaults}
+        >
+          <Plus className="size-4" />
+          Add Defaults
+        </Button>
+      </div>
+      <Card className="rounded-[14px] border-border shadow-none">
+        <CardContent className="px-0 pb-0 [&:last-child]:pb-0">
+          {assignments.map((assignment) => {
+            const agent = agents.find((a) => a.id === assignment.agentId);
+            const plan = plans.find((p) => p.id === assignment.planId);
+            const assignedFees = fees.filter((f) => assignment.feeIds.includes(f.id));
+            if (!agent) return null;
+            return (
+              <div key={assignment.id} className="flex min-h-[66px] items-center justify-between border-b px-6 py-3 last:border-b-0">
+                <div className="flex items-center gap-3">
+                  <Avatar className="size-8 shrink-0">
+                    <AvatarFallback className="text-xs">
+                      {agent.name.split(" ").map((p) => p[0]).join("")}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex flex-col gap-0.5">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium leading-5">{agent.name}</p>
+                      <Badge variant="outline" className="text-xs">{agent.role}</Badge>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                      {plan ? (
+                        <span>{plan.name}</span>
+                      ) : (
+                        <span className="italic">No plan</span>
+                      )}
+                      {assignedFees.length > 0 && (
+                        <>
+                          <span>·</span>
+                          <span>{assignedFees.map((f) => f.name).join(", ")}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`${agent.name} assignment menu`}
+                      className="size-8"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <MoreVertical className="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" sideOffset={8} className="w-[160px]">
+                    <DropdownMenuGroup>
+                      <DropdownMenuItem onClick={() => onEdit(assignment)}>
+                        <Edit3 className="size-4" />
+                        Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => onPreview(assignment)}>
+                        <FileText className="size-4" />
+                        Preview
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => onDeals(assignment)}>
+                        <Briefcase className="size-4" />
+                        Deals
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem variant="destructive" onClick={() => onClear(assignment)}>
+                        <Trash2 className="size-4" />
+                        Clear
+                      </DropdownMenuItem>
+                    </DropdownMenuGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            );
+          })}
+        </CardContent>
+      </Card>
+    </section>
+  );
+}
+
 export function CDASettings() {
   const [state, setState] = useState<{
     plans: CommissionPlan[];
     activePlanId: string | null;
     activeDialog: DialogName;
+    planDialogMode: DialogMode;
     form: PlanForm;
     errors: PlanErrors;
     pendingPlan: CommissionPlan | null;
     overwriteOpen: boolean;
     fees: FeeRecord[];
     feeDraft: Partial<FeeTypeDraft>;
+    feeDialogMode: DialogMode;
     assignDefaultsForm: AssignDefaultsForm;
     assignDefaultsErrors: AssignDefaultsErrors;
+    defaultAssignments: AgentAssignment[];
+    assignDefaultsSource: AssignDefaultsSource;
+    archiveTarget: ArchiveTarget | null;
+    duplicateTarget: DuplicateTarget | null;
+    clearAssignmentTarget: AgentAssignment | null;
+    previewAssignment: AgentAssignment | null;
+    dealsAssignment: AgentAssignment | null;
+    isAssigning: boolean;
   }>({
     plans: seedPlans,
     activePlanId: null,
     activeDialog: null,
+    planDialogMode: "add",
     form: getFreshPlanForm(),
     errors: {},
     pendingPlan: null,
     overwriteOpen: false,
     fees: seedFees,
     feeDraft: {},
+    feeDialogMode: "add",
     assignDefaultsForm: getFreshAssignDefaultsForm(),
     assignDefaultsErrors: {},
+    defaultAssignments: seedAssignments,
+    assignDefaultsSource: { from: "bulk" },
+    archiveTarget: null,
+    duplicateTarget: null,
+    clearAssignmentTarget: null,
+    previewAssignment: null,
+    dealsAssignment: null,
+    isAssigning: false,
   });
 
   const selectedDefaultAgents = useMemo(() => {
@@ -1181,20 +1507,50 @@ export function CDASettings() {
   }
 
   function handleSaveAssignDefaults() {
+    const source = state.assignDefaultsSource;
+    const form = state.assignDefaultsForm;
     const errs: AssignDefaultsErrors = {};
-    if (!state.assignDefaultsForm.planId) errs.planId = "Commission plan required";
-    if (state.assignDefaultsForm.assignMode === "specific" && state.assignDefaultsForm.selectedAgentIds.length === 0) {
+
+    if (source.from !== "plan" && !form.planId) errs.planId = "Commission plan required";
+    if (source.from !== "agent" && form.assignMode === "specific" && form.selectedAgentIds.length === 0) {
       errs.selectedAgentIds = "Select at least one agent";
     }
+
     if (Object.keys(errs).length > 0) {
       setState((current) => ({ ...current, assignDefaultsErrors: errs }));
       return;
     }
+
+    const effectivePlanId = source.from === "plan" ? source.planId : form.planId || null;
+    const effectiveFeeIds =
+      source.from === "fee"
+        ? [source.feeId, ...form.feeIds.filter((id) => id !== source.feeId)]
+        : form.feeIds;
+    const targetAgentIds =
+      source.from === "agent"
+        ? [source.agentId]
+        : form.assignMode === "all"
+          ? agents.map((a) => a.id)
+          : form.selectedAgentIds;
+
+    const newAssignments: AgentAssignment[] = targetAgentIds.map((agentId) => ({
+      id: crypto.randomUUID(),
+      agentId,
+      planId: effectivePlanId,
+      feeIds: effectiveFeeIds,
+      applyToActiveDeals: form.applyToActiveDeals,
+    }));
+
     setState((current) => ({
       ...current,
+      defaultAssignments: [
+        ...current.defaultAssignments.filter((a) => !targetAgentIds.includes(a.agentId)),
+        ...newAssignments,
+      ],
       activeDialog: null,
       assignDefaultsForm: getFreshAssignDefaultsForm(),
       assignDefaultsErrors: {},
+      assignDefaultsSource: { from: "bulk" },
     }));
     toast("Defaults assigned");
   }
@@ -1322,6 +1678,7 @@ export function CDASettings() {
         plans,
         activePlanId: plan.id,
         activeDialog: null,
+        planDialogMode: "add",
         form: getFreshPlanForm(),
         errors: {},
         pendingPlan: null,
@@ -1352,6 +1709,7 @@ export function CDASettings() {
     setState((current) => ({
       ...current,
       activeDialog: "add-plan",
+      planDialogMode: "edit",
       errors: {},
       form: {
         ...getFreshPlanForm(),
@@ -1377,32 +1735,116 @@ export function CDASettings() {
   }
 
   function duplicatePlan(plan: CommissionPlan) {
-    const duplicate = {
-      ...plan,
-      id: crypto.randomUUID(),
-      name: `${plan.name} Copy`,
-      assignedAgentsCount: 0,
-    };
-    setState((current) => ({ ...current, plans: [...current.plans, duplicate] }));
-    toast("Commission plan duplicated");
+    setState((current) => ({ ...current, duplicateTarget: { type: "plan", plan } }));
+  }
+
+  function confirmDuplicatePlan() {
+    const target = state.duplicateTarget;
+    if (target?.type !== "plan") return;
+    const plan = target.plan;
+    setState((current) => ({
+      ...current,
+      duplicateTarget: null,
+      activeDialog: "add-plan",
+      planDialogMode: "edit",
+      errors: {},
+      form: {
+        ...getFreshPlanForm(),
+        editingPlanId: null,
+        planName: `${plan.name} Copy`,
+        planType: plan.type,
+        agentSplit: String(plan.agentSplit),
+        teamSplit: String(plan.teamSplit),
+        feeType: plan.feeType,
+        feeAmount: String(plan.feeAmount),
+        capAmount: String(plan.capAmount),
+        resetPeriod: plan.resetPeriod,
+        basedOn: plan.basedOn,
+        dealTypes: {
+          buyer: plan.dealTypes.includes("Buyer"),
+          seller: plan.dealTypes.includes("Seller"),
+          lease: plan.dealTypes.includes("Lease"),
+          landlord: plan.dealTypes.includes("Landlord"),
+        },
+        tiers: plan.tiers.map((tier) => ({ ...tier })),
+      },
+    }));
   }
 
   function assignDefaults(plan: CommissionPlan) {
     setState((current) => ({
       ...current,
       activeDialog: "assign-defaults",
+      assignDefaultsSource: { from: "plan", planId: plan.id },
       assignDefaultsForm: { ...getFreshAssignDefaultsForm(), planId: plan.id },
       assignDefaultsErrors: {},
     }));
   }
 
-  function versionHistory(plan: CommissionPlan) {
-    toast(`Version history opened for ${plan.name}`);
+  function assignFromFee(fee: FeeRecord) {
+    setState((current) => ({
+      ...current,
+      activeDialog: "assign-defaults",
+      assignDefaultsSource: { from: "fee", feeId: fee.id },
+      assignDefaultsForm: { ...getFreshAssignDefaultsForm(), feeIds: [fee.id] },
+      assignDefaultsErrors: {},
+    }));
   }
 
-  function deletePlan(planId: string) {
-    setState((current) => ({ ...current, plans: current.plans.filter((plan) => plan.id !== planId) }));
-    toast("Commission plan deleted");
+  function archivePlan(plan: CommissionPlan) {
+    setState((current) => ({
+      ...current,
+      archiveTarget: { type: "plan", id: plan.id, name: plan.name },
+    }));
+  }
+
+  function confirmArchive() {
+    if (!state.archiveTarget) return;
+    const { type, id } = state.archiveTarget;
+    if (type === "plan") {
+      setState((current) => ({
+        ...current,
+        plans: current.plans.filter((p) => p.id !== id),
+        archiveTarget: null,
+      }));
+      toast("Commission plan archived");
+    } else {
+      setState((current) => ({
+        ...current,
+        fees: current.fees.filter((f) => f.id !== id),
+        archiveTarget: null,
+      }));
+      toast("Fee type archived");
+    }
+  }
+
+  function confirmClearAssignment() {
+    if (!state.clearAssignmentTarget) return;
+    const { agentId } = state.clearAssignmentTarget;
+    setState((current) => ({
+      ...current,
+      defaultAssignments: current.defaultAssignments.filter((a) => a.agentId !== agentId),
+      clearAssignmentTarget: null,
+    }));
+    toast("Default assignment cleared");
+  }
+
+  function editAssignment(assignment: AgentAssignment) {
+    const agent = agents.find((a) => a.id === assignment.agentId);
+    setState((current) => ({
+      ...current,
+      activeDialog: "assign-defaults",
+      assignDefaultsSource: { from: "agent", agentId: assignment.agentId },
+      assignDefaultsForm: {
+        planId: assignment.planId ?? "",
+        feeIds: assignment.feeIds,
+        assignMode: "specific",
+        selectedAgentIds: [assignment.agentId],
+        applyToActiveDeals: assignment.applyToActiveDeals,
+      },
+      assignDefaultsErrors: {},
+    }));
+    void agent;
   }
 
   function renderCommissionPlans() {
@@ -1414,7 +1856,15 @@ export function CDASettings() {
           emptyDescription="Create plans like 80/20 Standard or tiered plans for agents."
           icon={FileText}
           action="Add Plan"
-          onAction={() => setState((current) => ({ ...current, activeDialog: "add-plan", form: getFreshPlanForm(), errors: {} }))}
+          onAction={() =>
+            setState((current) => ({
+              ...current,
+              activeDialog: "add-plan",
+              planDialogMode: "add",
+              form: getFreshPlanForm(),
+              errors: {},
+            }))
+          }
         />
       );
     }
@@ -1430,7 +1880,15 @@ export function CDASettings() {
             variant="outline"
             size="sm"
             className="border-primary text-primary hover:text-primary"
-            onClick={() => setState((current) => ({ ...current, activeDialog: "add-plan", form: getFreshPlanForm(), errors: {} }))}
+            onClick={() =>
+              setState((current) => ({
+                ...current,
+                activeDialog: "add-plan",
+                planDialogMode: "add",
+                form: getFreshPlanForm(),
+                errors: {},
+              }))
+            }
           >
             <Plus className="size-4" />
             Add Plan
@@ -1443,10 +1901,9 @@ export function CDASettings() {
                 key={plan.id}
                 plan={plan}
                 onEdit={editPlan}
+                onAssign={assignDefaults}
                 onDuplicate={duplicatePlan}
-                onAssignDefaults={assignDefaults}
-                onVersionHistory={versionHistory}
-                onDelete={deletePlan}
+                onArchive={archivePlan}
               />
             ))}
           </CardContent>
@@ -1465,21 +1922,26 @@ export function CDASettings() {
         ? current.fees.map((item) => (item.id === feeId ? fee : item))
         : [...current.fees, fee],
       feeDraft: {},
+      feeDialogMode: "add",
     }));
 
-    toast(fee.appliesToMode === "agents" ? "Fee type added and applied" : "Fee type added");
+    toast(data.id ? "Fee type updated" : "Fee type added");
   }
 
   function duplicateFee(fee: FeeRecord) {
+    setState((current) => ({ ...current, duplicateTarget: { type: "fee", fee } }));
+  }
+
+  function confirmDuplicateFee() {
+    const target = state.duplicateTarget;
+    if (target?.type !== "fee") return;
+    const fee = target.fee;
     setState((current) => ({
       ...current,
+      duplicateTarget: null,
       activeDialog: "add-fee",
-      feeDraft: {
-        ...fee,
-        id: null,
-        step: 1,
-        name: `Copy of ${fee.name}`,
-      },
+      feeDialogMode: "edit",
+      feeDraft: { ...fee, id: null, name: `${fee.name} Copy` },
     }));
   }
 
@@ -1487,10 +1949,8 @@ export function CDASettings() {
     setState((current) => ({
       ...current,
       activeDialog: "add-fee",
-      feeDraft: {
-        ...fee,
-        step: fee.appliesToMode === "agents" ? 2 : 1,
-      },
+      feeDialogMode: "edit",
+      feeDraft: { ...fee },
     }));
   }
 
@@ -1503,7 +1963,14 @@ export function CDASettings() {
           emptyDescription="Create reusable deductions such as TC Fee, RM Fee, E&O Fee, or Compliance Review."
           icon={DollarSign}
           action="Add Fee"
-          onAction={() => setState((current) => ({ ...current, activeDialog: "add-fee", feeDraft: {} }))}
+          onAction={() =>
+            setState((current) => ({
+              ...current,
+              activeDialog: "add-fee",
+              feeDialogMode: "add",
+              feeDraft: {},
+            }))
+          }
         />
       );
     }
@@ -1519,7 +1986,14 @@ export function CDASettings() {
             variant="outline"
             size="sm"
             className="border-primary text-primary hover:text-primary"
-            onClick={() => setState((current) => ({ ...current, activeDialog: "add-fee", feeDraft: {} }))}
+            onClick={() =>
+              setState((current) => ({
+                ...current,
+                activeDialog: "add-fee",
+                feeDialogMode: "add",
+                feeDraft: {},
+              }))
+            }
           >
             <Plus className="size-4" />
             Add Fee
@@ -1544,19 +2018,28 @@ export function CDASettings() {
                 </div>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="size-8">
+                    <Button variant="ghost" size="icon" className="size-8" onClick={(event) => event.stopPropagation()}>
                       <MoreVertical className="size-4" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-[160px]">
+                  <DropdownMenuContent align="end" sideOffset={8} className="w-[170px]">
                     <DropdownMenuGroup>
                       <DropdownMenuItem onClick={() => editFee(fee)}>
                         <Edit3 className="size-4" />
                         Edit
                       </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => assignFromFee(fee)}>
+                        <UserCheck className="size-4" />
+                        Assign
+                      </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => duplicateFee(fee)}>
                         <Copy className="size-4" />
                         Duplicate
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem variant="destructive" onClick={() => setState((current) => ({ ...current, archiveTarget: { type: "fee", id: fee.id, name: fee.name } }))}>
+                        <Archive className="size-4" />
+                        Archive
                       </DropdownMenuItem>
                     </DropdownMenuGroup>
                   </DropdownMenuContent>
@@ -1647,19 +2130,33 @@ export function CDASettings() {
         <div className="flex flex-col gap-8 px-4 py-9">
           {renderCommissionPlans()}
           {renderFeeTypes()}
-          <EmptySection
-            title="Default Assignments"
-            description="Connect plans and fees to agents so new CDA estimates use the right calculation rules."
-            emptyDescription="Assign commission plans and fee types to agents so CDA estimates are created automatically."
-            icon={UserCheck}
-            action="Add Defaults"
-            onAction={() => setState((current) => ({ ...current, activeDialog: "assign-defaults", assignDefaultsForm: getFreshAssignDefaultsForm(), assignDefaultsErrors: {} }))}
-          />
+          {state.defaultAssignments.length === 0 ? (
+            <EmptySection
+              title="Default Assignments"
+              description="Connect plans and fees to agents so new CDA estimates use the right calculation rules."
+              emptyDescription="Assign commission plans and fee types to agents so CDA estimates are created automatically."
+              icon={UserCheck}
+              action="Add Defaults"
+              onAction={() => setState((current) => ({ ...current, activeDialog: "assign-defaults", assignDefaultsSource: { from: "bulk" }, assignDefaultsForm: getFreshAssignDefaultsForm(), assignDefaultsErrors: {} }))}
+            />
+          ) : (
+            <DefaultAssignmentsTable
+              assignments={state.defaultAssignments}
+              plans={state.plans}
+              fees={state.fees}
+              onEdit={editAssignment}
+              onPreview={(assignment) => setState((current) => ({ ...current, previewAssignment: assignment }))}
+              onDeals={(assignment) => setState((current) => ({ ...current, dealsAssignment: assignment }))}
+              onClear={(assignment) => setState((current) => ({ ...current, clearAssignmentTarget: assignment }))}
+              onAddDefaults={() => setState((current) => ({ ...current, activeDialog: "assign-defaults", assignDefaultsSource: { from: "bulk" }, assignDefaultsForm: getFreshAssignDefaultsForm(), assignDefaultsErrors: {} }))}
+            />
+          )}
         </div>
       </main>
 
       <AddPlanDialog
         open={state.activeDialog === "add-plan"}
+        title={state.planDialogMode === "edit" ? "Edit Commission Plan" : "Add Commission Plan"}
         form={state.form}
         errors={state.errors}
         onFormChange={updateForm}
@@ -1674,6 +2171,7 @@ export function CDASettings() {
 
       <FeeBuilderModal
         open={state.activeDialog === "add-fee"}
+        title={state.feeDialogMode === "edit" ? "Edit Fee Type" : "Add Fee Type"}
         initialData={state.feeDraft}
         onOpenChange={(open) => setState((current) => ({ ...current, activeDialog: open ? "add-fee" : null }))}
         onSave={saveFeeType}
@@ -1681,10 +2179,12 @@ export function CDASettings() {
 
       <AssignDefaultsDialog
         open={state.activeDialog === "assign-defaults"}
+        source={state.assignDefaultsSource}
         form={state.assignDefaultsForm}
         errors={state.assignDefaultsErrors}
         plans={state.plans}
         fees={state.fees}
+        isAssigning={state.isAssigning}
         onFormChange={updateAssignDefaultsForm}
         onOpenChange={(open) => setState((current) => ({ ...current, activeDialog: open ? "assign-defaults" : null }))}
         onSave={handleSaveAssignDefaults}
@@ -1709,6 +2209,221 @@ export function CDASettings() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AlertDialog
+        open={Boolean(state.archiveTarget)}
+        onOpenChange={(open) => { if (!open) setState((current) => ({ ...current, archiveTarget: null })); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Archive {state.archiveTarget?.type === "plan" ? "commission plan" : "fee type"}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              <span className="font-medium">{state.archiveTarget?.name}</span> will be archived and removed from active use.
+              Existing CDAs are not affected.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmArchive} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Archive
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={Boolean(state.clearAssignmentTarget)}
+        onOpenChange={(open) => { if (!open) setState((current) => ({ ...current, clearAssignmentTarget: null })); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear default assignment?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {(() => {
+                const agent = agents.find((a) => a.id === state.clearAssignmentTarget?.agentId);
+                return agent
+                  ? `Remove the default commission plan and fees for ${agent.name}. New CDAs for this agent will require manual setup.`
+                  : "This agent's default assignment will be cleared.";
+              })()}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmClearAssignment} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Clear
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Duplicate Commission Plan confirmation */}
+      <AlertDialog
+        open={state.duplicateTarget?.type === "plan"}
+        onOpenChange={(open) => { if (!open) setState((current) => ({ ...current, duplicateTarget: null })); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Duplicate Commission Plan</AlertDialogTitle>
+            <AlertDialogDescription>
+              A copy of <span className="font-medium">{state.duplicateTarget?.type === "plan" ? state.duplicateTarget.plan.name : ""}</span> will be created. You can edit the details before saving.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDuplicatePlan}>Duplicate</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Duplicate Fee Type confirmation */}
+      <AlertDialog
+        open={state.duplicateTarget?.type === "fee"}
+        onOpenChange={(open) => { if (!open) setState((current) => ({ ...current, duplicateTarget: null })); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Duplicate Fee Type</AlertDialogTitle>
+            <AlertDialogDescription>
+              A copy of <span className="font-medium">{state.duplicateTarget?.type === "fee" ? state.duplicateTarget.fee.name : ""}</span> will be created. You can edit the details before saving.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDuplicateFee}>Duplicate</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* CDA Impact Preview Dialog */}
+      {state.previewAssignment && (() => {
+        const assignment = state.previewAssignment;
+        const agent = agents.find((a) => a.id === assignment.agentId);
+        const plan = state.plans.find((p) => p.id === assignment.planId);
+        const assignedFees = state.fees.filter((f) => assignment.feeIds.includes(f.id));
+        return (
+          <Dialog open onOpenChange={(open) => { if (!open) setState((current) => ({ ...current, previewAssignment: null })); }}>
+            <DialogContent className="!flex !h-auto !max-h-[82vh] !w-[560px] !max-w-[calc(100vw-48px)] !flex-col !gap-0 !overflow-hidden !rounded-[12px] !p-0 sm:!max-w-[560px] [&>button[data-slot=dialog-close]]:hidden">
+              <DialogHeader className="!flex !flex-row !items-start !justify-between !gap-4 border-b px-6 pt-6 pb-4 !text-left">
+                <div>
+                  <DialogTitle className="text-base font-semibold leading-5">CDA Impact Preview</DialogTitle>
+                  <DialogDescription className="mt-1 text-sm text-muted-foreground">
+                    Estimated CDA breakdown for {agent?.name ?? "agent"}.
+                  </DialogDescription>
+                </div>
+                <button
+                  type="button"
+                  aria-label="Close"
+                  className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  onClick={() => setState((current) => ({ ...current, previewAssignment: null }))}
+                >
+                  <X className="size-4" />
+                </button>
+              </DialogHeader>
+              <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-5">
+                <div className="flex items-center gap-3 rounded-lg border bg-muted/40 px-4 py-3">
+                  <Avatar className="size-8 shrink-0">
+                    <AvatarFallback className="text-xs">
+                      {agent?.name.split(" ").map((p) => p[0]).join("") ?? "?"}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <p className="text-sm font-medium">{agent?.name}</p>
+                    <p className="text-xs text-muted-foreground">{agent?.role}</p>
+                  </div>
+                </div>
+                <div className="rounded-lg border">
+                  <div className="border-b px-4 py-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Commission Plan</p>
+                    <p className="mt-1 text-sm font-medium">{plan?.name ?? <span className="italic text-muted-foreground">No plan assigned</span>}</p>
+                    {plan && (
+                      <p className="text-xs text-muted-foreground">
+                        {plan.type === "standard"
+                          ? `Agent ${plan.agentSplit}% / Team ${plan.teamSplit}% · Cap ${formatMoney(plan.capAmount)}`
+                          : `Tiered · ${plan.tiers.length} tiers`}
+                      </p>
+                    )}
+                  </div>
+                  <div className="px-4 py-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Fees Applied</p>
+                    {assignedFees.length > 0 ? (
+                      <div className="mt-2 flex flex-col gap-1.5">
+                        {assignedFees.map((fee) => (
+                          <div key={fee.id} className="flex items-center justify-between">
+                            <span className="text-sm">{fee.name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {fee.type === "flat" ? `$${fee.amount}` : `${fee.amount}%`} · {fee.timing === "pre-split" ? "Pre-split" : "Post-split"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-1 text-sm italic text-muted-foreground">No fees assigned</p>
+                    )}
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">Preview is based on current default assignments. Actual CDA values depend on transaction details.</p>
+              </div>
+              <DialogFooter className="!flex !flex-row !items-center !justify-end !gap-3 shrink-0 border-t bg-background px-6 py-4">
+                <Button variant="outline" onClick={() => setState((current) => ({ ...current, previewAssignment: null }))}>Close</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
+
+      {/* Affected Deals Dialog */}
+      {state.dealsAssignment && (() => {
+        const assignment = state.dealsAssignment;
+        const agent = agents.find((a) => a.id === assignment.agentId);
+        const plan = state.plans.find((p) => p.id === assignment.planId);
+        return (
+          <Dialog open onOpenChange={(open) => { if (!open) setState((current) => ({ ...current, dealsAssignment: null })); }}>
+            <DialogContent className="!flex !h-auto !max-h-[82vh] !w-[560px] !max-w-[calc(100vw-48px)] !flex-col !gap-0 !overflow-hidden !rounded-[12px] !p-0 sm:!max-w-[560px] [&>button[data-slot=dialog-close]]:hidden">
+              <DialogHeader className="!flex !flex-row !items-start !justify-between !gap-4 border-b px-6 pt-6 pb-4 !text-left">
+                <div>
+                  <DialogTitle className="text-base font-semibold leading-5">Affected Deals</DialogTitle>
+                  <DialogDescription className="mt-1 text-sm text-muted-foreground">
+                    Active transactions that would be recalculated for {agent?.name ?? "agent"}.
+                  </DialogDescription>
+                </div>
+                <button
+                  type="button"
+                  aria-label="Close"
+                  className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  onClick={() => setState((current) => ({ ...current, dealsAssignment: null }))}
+                >
+                  <X className="size-4" />
+                </button>
+              </DialogHeader>
+              <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-5">
+                <div className="flex items-center gap-3 rounded-lg border bg-muted/40 px-4 py-3">
+                  <Avatar className="size-8 shrink-0">
+                    <AvatarFallback className="text-xs">
+                      {agent?.name.split(" ").map((p) => p[0]).join("") ?? "?"}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <p className="text-sm font-medium">{agent?.name}</p>
+                    <p className="text-xs text-muted-foreground">{plan?.name ?? "No plan"}</p>
+                  </div>
+                </div>
+                <div className="flex flex-col items-center justify-center rounded-lg border py-10 text-center">
+                  <Briefcase className="mb-3 size-8 text-muted-foreground/40" />
+                  <p className="text-sm font-medium text-foreground">No active deals</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    There are no under-contract deals for {agent?.name ?? "this agent"} that would be affected.
+                  </p>
+                </div>
+              </div>
+              <DialogFooter className="!flex !flex-row !items-center !justify-end !gap-3 shrink-0 border-t bg-background px-6 py-4">
+                <Button variant="outline" onClick={() => setState((current) => ({ ...current, dealsAssignment: null }))}>Close</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
 
       <Toaster />
     </div>
