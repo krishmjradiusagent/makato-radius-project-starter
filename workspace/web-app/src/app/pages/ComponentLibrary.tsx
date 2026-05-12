@@ -18,7 +18,7 @@ import {
   type FinanceSummaryData,
   type AgentBreakdownData,
   type TierData,
-  type FeeData,
+  type FeeTypeDraft,
   type TransactionSide,
 } from "../components/finance";
 import { Separator } from "../components/ui/separator";
@@ -141,7 +141,7 @@ export function ComponentLibrary() {
     },
   ]);
 
-  const handleSaveFee = (data: FeeData) => {
+  const handleSaveFee = (data: FeeTypeDraft) => {
     console.log("Fee saved:", data);
   };
 

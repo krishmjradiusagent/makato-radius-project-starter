@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Archive,
   Bell,
@@ -79,6 +79,7 @@ import { Separator } from "../components/ui/separator";
 import { Switch } from "../components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { Toaster } from "../components/ui/sonner";
+import { FeeBuilderModal } from "../components/finance/fee-builder-modal";
 
 type PlanType = "standard" | "tiered";
 type FeeType = "flat" | "percentage";
@@ -610,6 +611,306 @@ function TierBuilder({
   );
 }
 
+function PlanSetupSummaryCard({
+  form,
+  expanded,
+  onExpandToggle,
+  onEdit,
+}: {
+  form: PlanForm;
+  expanded: boolean;
+  onExpandToggle: () => void;
+  onEdit: () => void;
+}) {
+  const selectedDealTypes = Object.entries(form.dealTypes)
+    .filter(([, selected]) => selected)
+    .map(([dealType]) => dealType.charAt(0).toUpperCase() + dealType.slice(1));
+  const splitSummary =
+    form.planType === "standard"
+      ? `Agent ${form.agentSplit}% / Team ${form.teamSplit}%`
+      : `${form.tiers.length} tiers`;
+  const feeSummary =
+    form.feeType === "flat"
+      ? `${formatMoney(numericValue(form.feeAmount || "495"))} flat`
+      : `${form.feeAmount || "2.5"}%`;
+
+  return (
+    <Card className="rounded-lg border bg-muted/40 shadow-none">
+      <CardContent className="p-3">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <p className="text-sm font-medium leading-5 text-foreground">Plan setup</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm text-foreground">{form.planName || "Unnamed plan"}</p>
+              <span className="text-xs text-muted-foreground">·</span>
+              <Badge variant="secondary">{form.planType === "standard" ? "Standard" : "Tiered"}</Badge>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {splitSummary} · {feeSummary} · Cap {formatMoney(numericValue(form.capAmount || "0"))}
+            </p>
+            {selectedDealTypes.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {selectedDealTypes.map((dealType) => (
+                  <Badge key={dealType} variant="outline" className="bg-background">
+                    {dealType}
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button variant="ghost" size="sm" className="h-8 px-2.5" onClick={onEdit}>
+              Edit
+            </Button>
+            <Button variant="outline" size="sm" className="h-8 px-2.5" onClick={onExpandToggle}>
+              {expanded ? "Collapse" : "Expand"}
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function PlanSetupFields({
+  form,
+  errors,
+  feeLabel,
+  splitTotal,
+  onFormChange,
+  onAgentSplitChange,
+  onTeamSplitChange,
+  onUpdateTier,
+  onAddTier,
+  onRemoveTier,
+}: {
+  form: PlanForm;
+  errors: PlanErrors;
+  feeLabel: string;
+  splitTotal: number;
+  onFormChange: (patch: Partial<PlanForm>) => void;
+  onAgentSplitChange: (value: string) => void;
+  onTeamSplitChange: (value: string) => void;
+  onUpdateTier: (tierId: string, patch: Partial<TierRow>) => void;
+  onAddTier: () => void;
+  onRemoveTier: (tierId: string) => void;
+}) {
+  return (
+    <>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="plan-name" className="text-sm font-medium">Plan Name</Label>
+        <Input
+          id="plan-name"
+          value={form.planName}
+          placeholder="e.g., 80/20 Standard"
+          aria-invalid={Boolean(errors.planName)}
+          className="h-10 w-full box-border"
+          onChange={(event) => onFormChange({ planName: event.target.value })}
+        />
+        {errors.planName && <p className="text-xs text-destructive">{errors.planName}</p>}
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <Label className="text-sm font-medium">Plan Type</Label>
+        <Tabs value={form.planType} onValueChange={(value) => onFormChange({ planType: value as PlanType })}>
+          <TabsList className="grid h-10 w-full grid-cols-2">
+            <TabsTrigger value="standard">Standard</TabsTrigger>
+            <TabsTrigger value="tiered">Tiered</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+
+      {form.planType === "standard" ? (
+        <>
+          <div className="grid w-full grid-cols-2 gap-4">
+            <div className="flex w-full flex-col gap-2">
+              <Label htmlFor="agent-split" className="text-sm font-medium">Agent Split %</Label>
+              <Input
+                id="agent-split"
+                value={form.agentSplit}
+                inputMode="numeric"
+                aria-invalid={Boolean(errors.splitTotal)}
+                className="h-10 w-full box-border"
+                onChange={(event) => onAgentSplitChange(event.target.value)}
+              />
+            </div>
+            <div className="flex w-full flex-col gap-2">
+              <Label htmlFor="team-split" className="text-sm font-medium">Team Split %</Label>
+              <Input
+                id="team-split"
+                value={form.teamSplit}
+                inputMode="numeric"
+                aria-invalid={Boolean(errors.splitTotal)}
+                className="h-10 w-full box-border"
+                onChange={(event) => onTeamSplitChange(event.target.value)}
+              />
+            </div>
+          </div>
+          <p className={errors.splitTotal ? "text-xs text-destructive" : "text-xs text-muted-foreground"}>
+            {errors.splitTotal ?? `Split total must equal 100%. Current: ${splitTotal}%`}
+          </p>
+        </>
+      ) : (
+        <div className="grid w-full grid-cols-2 gap-4">
+          <div className="flex w-full flex-col gap-2">
+            <Label className="text-sm font-medium">Reset Period</Label>
+            <Select value={form.resetPeriod} onValueChange={(value) => onFormChange({ resetPeriod: value as ResetPeriod })}>
+              <SelectTrigger className="h-10 w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value="yearly">Yearly</SelectItem>
+                  <SelectItem value="quarterly">Quarterly</SelectItem>
+                  <SelectItem value="monthly">Monthly</SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex w-full flex-col gap-2">
+            <Label className="text-sm font-medium">Based On</Label>
+            <Select value={form.basedOn} onValueChange={(value) => onFormChange({ basedOn: value as BasedOn })}>
+              <SelectTrigger className="h-10 w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value="units">Units</SelectItem>
+                  <SelectItem value="gci">Gross Commission</SelectItem>
+                  <SelectItem value="sales-volume">Sales Volume</SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-2">
+        <Label className="text-sm font-medium">Fee Type</Label>
+        <Tabs value={form.feeType} onValueChange={(value) => onFormChange({ feeType: value as FeeType, feeAmount: "" })}>
+          <TabsList className="grid h-10 w-full grid-cols-2">
+            <TabsTrigger value="flat">Flat</TabsTrigger>
+            <TabsTrigger value="percentage">Percentage</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+
+      <div className="grid w-full grid-cols-2 gap-4">
+        <div className="flex w-full flex-col gap-2">
+          <Label htmlFor="fee-amount" className="text-sm font-medium">{feeLabel}</Label>
+          <AdornedInput
+            id="fee-amount"
+            value={form.feeAmount}
+            placeholder={form.feeType === "flat" ? "495" : "2.5"}
+            adornment={form.feeType === "flat" ? "$" : "%"}
+            adornmentSide={form.feeType === "flat" ? "start" : "end"}
+            onChange={(value) => onFormChange({ feeAmount: value })}
+          />
+        </div>
+        <div className="flex w-full flex-col gap-2">
+          <Label htmlFor="cap" className="text-sm font-medium">Cap Amount</Label>
+          <AdornedInput
+            id="cap"
+            value={form.capAmount}
+            placeholder="18000"
+            adornment="$"
+            onChange={(value) => onFormChange({ capAmount: value })}
+          />
+        </div>
+      </div>
+
+      {form.planType === "tiered" && (
+        <>
+          <Separator />
+          <TierBuilder
+            form={form}
+            errors={errors}
+            onUpdateTier={onUpdateTier}
+            onAddTier={onAddTier}
+            onRemoveTier={onRemoveTier}
+          />
+        </>
+      )}
+
+      <div className="flex flex-col gap-2">
+        <Label className="text-sm font-medium">Deal Types</Label>
+        <div className="grid w-full grid-cols-2 gap-3">
+          {Object.keys(form.dealTypes).map((dealType) => (
+            <label key={dealType} className="flex w-full items-center gap-2 text-sm font-medium">
+              <Checkbox
+                checked={form.dealTypes[dealType]}
+                onCheckedChange={(checked) =>
+                  onFormChange({
+                    dealTypes: {
+                      ...form.dealTypes,
+                      [dealType]: checked === true,
+                    },
+                  })
+                }
+              />
+              {dealType.charAt(0).toUpperCase() + dealType.slice(1)}
+            </label>
+          ))}
+        </div>
+        {errors.dealTypes && <p className="text-xs text-destructive">{errors.dealTypes}</p>}
+      </div>
+    </>
+  );
+}
+
+function DefaultAssignmentSection({
+  form,
+  errors,
+  onFormChange,
+}: {
+  form: PlanForm;
+  errors: PlanErrors;
+  onFormChange: (patch: Partial<PlanForm>) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between gap-4">
+        <Label htmlFor="apply-default" className="text-sm font-medium">Assign this plan as default</Label>
+        <Switch
+          id="apply-default"
+          checked={form.applyAsDefault}
+          onCheckedChange={(checked) => onFormChange({ applyAsDefault: checked })}
+        />
+      </div>
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center justify-between gap-3">
+          <Label className="text-sm font-medium">Assign default to</Label>
+          <Badge variant="secondary">{form.defaultMode === "all" ? "All team members" : "Specific agents"}</Badge>
+        </div>
+        <RadioGroup value={form.defaultMode} onValueChange={(value) => onFormChange({ defaultMode: value as DefaultMode })}>
+          <label className="flex items-start gap-3 rounded-lg border p-3">
+            <RadioGroupItem value="all" />
+            <div className="flex flex-col gap-1">
+              <span className="text-sm font-medium">All team members</span>
+              <span className="text-xs text-muted-foreground">
+                This plan will apply to all current team members for new CDA calculations.
+              </span>
+            </div>
+          </label>
+          <label className="flex items-start gap-3 rounded-lg border p-3">
+            <RadioGroupItem value="specific" />
+            <span className="text-sm font-medium">Specific agents</span>
+          </label>
+        </RadioGroup>
+        {form.defaultMode === "specific" && (
+          <>
+            <AgentSelector
+              selectedAgentIds={form.selectedAgentIds}
+              onChange={(selectedAgentIds) => onFormChange({ selectedAgentIds })}
+            />
+            {errors.selectedAgentIds && <p className="text-xs text-destructive">{errors.selectedAgentIds}</p>}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function AddPlanDialog({
   open,
   form,
@@ -637,6 +938,16 @@ function AddPlanDialog({
 }) {
   const splitTotal = numericValue(form.agentSplit) + numericValue(form.teamSplit);
   const feeLabel = form.feeType === "flat" ? "Flat Fee" : "Fee Percentage";
+  const [planSetupExpanded, setPlanSetupExpanded] = useState(!form.applyAsDefault);
+  const saveLabel = form.applyAsDefault ? "Save & Assign" : "Save Plan";
+
+  useEffect(() => {
+    if (form.applyAsDefault) {
+      setPlanSetupExpanded(false);
+    } else {
+      setPlanSetupExpanded(true);
+    }
+  }, [form.applyAsDefault, open]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -654,218 +965,67 @@ function AddPlanDialog({
           </button>
         </DialogHeader>
         <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="plan-name" className="text-sm font-medium">Plan Name</Label>
-            <Input
-              id="plan-name"
-              value={form.planName}
-              placeholder="e.g., 80/20 Standard"
-              aria-invalid={Boolean(errors.planName)}
-              className="h-10 w-full box-border"
-              onChange={(event) => onFormChange({ planName: event.target.value })}
-            />
-            {errors.planName && <p className="text-xs text-destructive">{errors.planName}</p>}
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <Label className="text-sm font-medium">Plan Type</Label>
-            <Tabs value={form.planType} onValueChange={(value) => onFormChange({ planType: value as PlanType })}>
-              <TabsList className="grid h-10 w-full grid-cols-2">
-                <TabsTrigger value="standard">Standard</TabsTrigger>
-                <TabsTrigger value="tiered">Tiered</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
-
-          {form.planType === "standard" ? (
+          {form.applyAsDefault ? (
             <>
-              <div className="grid w-full grid-cols-2 gap-4">
-                <div className="flex w-full flex-col gap-2">
-                  <Label htmlFor="agent-split" className="text-sm font-medium">Agent Split %</Label>
-                  <Input
-                    id="agent-split"
-                    value={form.agentSplit}
-                    inputMode="numeric"
-                    aria-invalid={Boolean(errors.splitTotal)}
-                    className="h-10 w-full box-border"
-                    onChange={(event) => onAgentSplitChange(event.target.value)}
-                  />
-                </div>
-                <div className="flex w-full flex-col gap-2">
-                  <Label htmlFor="team-split" className="text-sm font-medium">Team Split %</Label>
-                  <Input
-                    id="team-split"
-                    value={form.teamSplit}
-                    inputMode="numeric"
-                    aria-invalid={Boolean(errors.splitTotal)}
-                    className="h-10 w-full box-border"
-                    onChange={(event) => onTeamSplitChange(event.target.value)}
-                  />
-                </div>
-              </div>
-              <p className={errors.splitTotal ? "text-xs text-destructive" : "text-xs text-muted-foreground"}>
-                {errors.splitTotal ?? `Split total must equal 100%. Current: ${splitTotal}%`}
-              </p>
+              <PlanSetupSummaryCard
+                form={form}
+                expanded={planSetupExpanded}
+                onEdit={() => setPlanSetupExpanded(true)}
+                onExpandToggle={() => setPlanSetupExpanded((current) => !current)}
+              />
+              {planSetupExpanded && (
+                <PlanSetupFields
+                  form={form}
+                  errors={errors}
+                  feeLabel={feeLabel}
+                  splitTotal={splitTotal}
+                  onFormChange={onFormChange}
+                  onAgentSplitChange={onAgentSplitChange}
+                  onTeamSplitChange={onTeamSplitChange}
+                  onUpdateTier={onUpdateTier}
+                  onAddTier={onAddTier}
+                  onRemoveTier={onRemoveTier}
+                />
+              )}
+              <DefaultAssignmentSection form={form} errors={errors} onFormChange={onFormChange} />
             </>
           ) : (
             <>
-              <div className="grid w-full grid-cols-2 gap-4">
-                <div className="flex w-full flex-col gap-2">
-                  <Label className="text-sm font-medium">Reset Period</Label>
-                  <Select value={form.resetPeriod} onValueChange={(value) => onFormChange({ resetPeriod: value as ResetPeriod })}>
-                    <SelectTrigger className="h-10 w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        <SelectItem value="yearly">Yearly</SelectItem>
-                        <SelectItem value="quarterly">Quarterly</SelectItem>
-                        <SelectItem value="monthly">Monthly</SelectItem>
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex w-full flex-col gap-2">
-                  <Label className="text-sm font-medium">Based On</Label>
-                  <Select value={form.basedOn} onValueChange={(value) => onFormChange({ basedOn: value as BasedOn })}>
-                    <SelectTrigger className="h-10 w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        <SelectItem value="units">Units</SelectItem>
-                        <SelectItem value="gci">Gross Commission</SelectItem>
-                        <SelectItem value="sales-volume">Sales Volume</SelectItem>
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </>
-          )}
-
-          <div className="flex flex-col gap-2">
-            <Label className="text-sm font-medium">Fee Type</Label>
-            <Tabs value={form.feeType} onValueChange={(value) => onFormChange({ feeType: value as FeeType, feeAmount: "" })}>
-              <TabsList className="grid h-10 w-full grid-cols-2">
-                <TabsTrigger value="flat">Flat</TabsTrigger>
-                <TabsTrigger value="percentage">Percentage</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
-
-          <div className="grid w-full grid-cols-2 gap-4">
-            <div className="flex w-full flex-col gap-2">
-              <Label htmlFor="fee-amount" className="text-sm font-medium">{feeLabel}</Label>
-              <AdornedInput
-                id="fee-amount"
-                value={form.feeAmount}
-                placeholder={form.feeType === "flat" ? "495" : "2.5"}
-                adornment={form.feeType === "flat" ? "$" : "%"}
-                adornmentSide={form.feeType === "flat" ? "start" : "end"}
-                onChange={(value) => onFormChange({ feeAmount: value })}
-              />
-            </div>
-            <div className="flex w-full flex-col gap-2">
-              <Label htmlFor="cap" className="text-sm font-medium">Cap Amount</Label>
-              <AdornedInput
-                id="cap"
-                value={form.capAmount}
-                placeholder="18000"
-                adornment="$"
-                onChange={(value) => onFormChange({ capAmount: value })}
-              />
-            </div>
-          </div>
-
-          {form.planType === "tiered" && (
-            <>
-              <Separator />
-              <TierBuilder
+              <PlanSetupFields
                 form={form}
                 errors={errors}
+                feeLabel={feeLabel}
+                splitTotal={splitTotal}
+                onFormChange={onFormChange}
+                onAgentSplitChange={onAgentSplitChange}
+                onTeamSplitChange={onTeamSplitChange}
                 onUpdateTier={onUpdateTier}
                 onAddTier={onAddTier}
                 onRemoveTier={onRemoveTier}
               />
+              <Separator />
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <Label htmlFor="apply-default" className="text-sm font-medium">Assign this plan as default</Label>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Choose who should use this plan for new CDA calculations.
+                  </p>
+                </div>
+                <Switch
+                  id="apply-default"
+                  checked={form.applyAsDefault}
+                  onCheckedChange={(checked) => {
+                    onFormChange({ applyAsDefault: checked });
+                    if (checked) setPlanSetupExpanded(false);
+                  }}
+                />
+              </div>
             </>
           )}
-
-          <div className="flex flex-col gap-2">
-            <Label className="text-sm font-medium">Deal Types</Label>
-            <div className="grid w-full grid-cols-2 gap-3">
-              {Object.keys(form.dealTypes).map((dealType) => (
-                <label key={dealType} className="flex w-full items-center gap-2 text-sm font-medium">
-                  <Checkbox
-                    checked={form.dealTypes[dealType]}
-                    onCheckedChange={(checked) =>
-                      onFormChange({
-                        dealTypes: {
-                          ...form.dealTypes,
-                          [dealType]: checked === true,
-                        },
-                      })
-                    }
-                  />
-                  {dealType.charAt(0).toUpperCase() + dealType.slice(1)}
-                </label>
-              ))}
-            </div>
-            {errors.dealTypes && <p className="text-xs text-destructive">{errors.dealTypes}</p>}
-          </div>
-
-          <Separator />
-
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <Label htmlFor="apply-default" className="text-sm font-medium">Assign this plan as default</Label>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Choose who should use this plan for new CDA calculations.
-                </p>
-              </div>
-              <Switch
-                id="apply-default"
-                checked={form.applyAsDefault}
-                onCheckedChange={(checked) => onFormChange({ applyAsDefault: checked })}
-              />
-            </div>
-
-            {form.applyAsDefault && (
-              <div className="flex flex-col gap-4">
-                <RadioGroup value={form.defaultMode} onValueChange={(value) => onFormChange({ defaultMode: value as DefaultMode })}>
-                  <label className="flex items-start gap-3 rounded-lg border p-3">
-                    <RadioGroupItem value="all" />
-                    <div className="flex flex-col gap-1">
-                      <span className="text-sm font-medium">All team members</span>
-                      {form.defaultMode === "all" && (
-                        <span className="text-xs text-muted-foreground">
-                          This plan will replace existing default plans after confirmation.
-                        </span>
-                      )}
-                    </div>
-                  </label>
-                  <label className="flex items-start gap-3 rounded-lg border p-3">
-                    <RadioGroupItem value="specific" />
-                    <span className="text-sm font-medium">Specific agents</span>
-                  </label>
-                </RadioGroup>
-                {form.defaultMode === "specific" && (
-                  <>
-                    <AgentSelector
-                      selectedAgentIds={form.selectedAgentIds}
-                      onChange={(selectedAgentIds) => onFormChange({ selectedAgentIds })}
-                    />
-                    {errors.selectedAgentIds && <p className="text-xs text-destructive">{errors.selectedAgentIds}</p>}
-                  </>
-                )}
-              </div>
-            )}
-          </div>
         </div>
         <DialogFooter className="!flex !flex-row !items-center !justify-end !gap-3 shrink-0 border-t bg-background px-6 py-4">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={onSave}>Save Plan</Button>
+          <Button onClick={onSave}>{saveLabel}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -1289,22 +1449,26 @@ export function CDASettings() {
         onSave={handleSavePlan}
       />
 
-      <Dialog open={state.activeDialog === "add-fee"} onOpenChange={(open) => setState((current) => ({ ...current, activeDialog: open ? "add-fee" : null }))}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add Fee Type</DialogTitle>
-            <DialogDescription>Define reusable deductions for CDA calculations.</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-3">
-            <Label htmlFor="fee-name">Fee Name</Label>
-            <Input id="fee-name" placeholder="e.g., Transaction Coordinator Fee" />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={closeDialog}>Cancel</Button>
-            <Button onClick={closeDialog}>Save Fee Type</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <FeeBuilderModal
+        open={state.activeDialog === "add-fee"}
+        initialData={{
+          id: null,
+          name: "",
+          type: "flat",
+          amount: "",
+          appliesToMode: "team",
+          agentIds: [],
+          timing: "post-split",
+          slidingScale: false,
+          tiers: [],
+          contributesToCap: false,
+        }}
+        onOpenChange={(open) => setState((current) => ({ ...current, activeDialog: open ? "add-fee" : null }))}
+        onSave={() => {
+          closeDialog();
+          toast("Fee type added");
+        }}
+      />
 
       <AlertDialog
         open={state.overwriteOpen}
