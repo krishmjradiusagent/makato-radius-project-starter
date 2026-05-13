@@ -25,3 +25,18 @@ This file tracks architectural and product decisions made during development.
 - **Decision**: Use a global `agents` array as the source of truth and re-render components on change.
 - **Rationale**: Simplest way to ensure data consistency in a non-reactive Vanilla JS environment without a state management library.
 - **Status**: Final
+
+---
+
+## Date: 2026-05-13
+### Decision: Remove Actions from Default Assignments Table
+- **Context**: The user wanted to simplify the Default Assignments table.
+- **Decision**: Removed the three-dot action menu.
+- **Rationale**: Reduces visual noise in the high-density assignment list.
+- **Status**: Final
+
+### Decision: Hide Default Assignments Section
+- **Context**: The user wanted to hide the Default Assignments table temporarily.
+- **Decision**: Commented out the section in both React and HTML.
+- **Rationale**: Temporary removal from view while other features are finalized.
+- **Status**: Temporary
