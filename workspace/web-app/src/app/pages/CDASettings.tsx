@@ -79,7 +79,12 @@ import {
   TableRow,
 } from "../components/ui/table";
 import { Toaster } from "../components/ui/sonner";
-import { FeeBuilderModal, type FeeTypeDraft } from "../components/finance/fee-builder-modal";
+import { 
+  FeeBadge, 
+  TierBuilderRow, 
+  FeeBuilderModal, 
+  AgentAvatarStack 
+} from "../components/finance";
 import { CDAFlowSwitcher } from "../components/finance/cda-flow-switcher";
 
 type PlanType = "standard" | "tiered";
@@ -446,40 +451,16 @@ function CommissionPlanCard({
             <span className="font-semibold text-foreground">{formatMoney(plan.capAmount)}</span>
           </div>
           <div className="flex items-center gap-1.5 ml-2">
-            {plan.dealTypes.map((dealType) => (
-              <Badge 
-                key={dealType} 
-                variant="secondary" 
-                className={cn(
-                  "px-2 py-0 h-5 text-[10px] font-semibold border-transparent",
-                  dealType === "Buyer" && "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400",
-                  dealType === "Seller" && "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400",
-                  dealType === "Lease" && "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
-                )}
-              >
-                {dealType}
-              </Badge>
-            ))}
-          </div>
-          <div className="flex items-center gap-2 border-l border-border/50 pl-4 ml-2">
             <div className="flex -space-x-2">
               {(() => {
                 const assignedAgentIds = seedAssignments.filter(a => a.planId === plan.id).map(a => a.agentId);
                 const assignedAgents = agents.filter(a => assignedAgentIds.includes(a.id));
                 return (
-                  <>
-                    {assignedAgents.slice(0, 3).map((agent) => (
-                      <Avatar key={agent.id} className="size-6 border-2 border-background ring-1 ring-border/5">
-                        <AvatarImage src={agent.avatarUrl} alt={agent.name} />
-                        <AvatarFallback className="text-[8px]">{agent.name.split(" ").map((p) => p[0]).join("")}</AvatarFallback>
-                      </Avatar>
-                    ))}
-                    {assignedAgents.length > 3 && (
-                      <div className="flex size-6 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground border-2 border-background ring-1 ring-border/5">
-                        +{assignedAgents.length - 3}
-                      </div>
-                    )}
-                  </>
+                  <AgentAvatarStack 
+                    agents={assignedAgents.map(a => ({ name: a.name, avatarUrl: a.avatarUrl }))} 
+                    max={3} 
+                    size="sm"
+                  />
                 );
               })()}
             </div>
@@ -2105,22 +2086,14 @@ export function CDASettings() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <div className="flex -space-x-2">
-                          {assignedAgents.slice(0, 3).map((agent) => (
-                            <Avatar key={agent.id} className="size-6 border-2 border-background ring-1 ring-border/5">
-                              <AvatarImage src={agent.avatarUrl} alt={agent.name} />
-                              <AvatarFallback className="text-[8px]">{agent.name.split(" ").map((p) => p[0]).join("")}</AvatarFallback>
-                            </Avatar>
-                          ))}
-                          {assignedAgents.length > 3 && (
-                            <div className="flex size-6 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground border-2 border-background ring-1 ring-border/5">
-                              +{assignedAgents.length - 3}
-                            </div>
-                          )}
-                          {assignedAgents.length === 0 && (
-                            <span className="text-xs text-muted-foreground italic">None</span>
-                          )}
-                        </div>
+                        <AgentAvatarStack 
+                          agents={assignedAgents.map(a => ({ name: a.name, avatarUrl: a.avatarUrl }))} 
+                          max={3} 
+                          size="sm"
+                        />
+                        {assignedAgents.length === 0 && (
+                          <span className="text-xs text-muted-foreground italic">None</span>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell className="pr-6 text-right">
@@ -2293,22 +2266,11 @@ export function CDASettings() {
                       </Badge>
                     ) : (
                       <div className="flex items-center gap-2">
-                        <div className="flex -space-x-2">
-                          {agents.filter(a => fee.agentIds.includes(a.id)).slice(0, 3).map((agent) => (
-                            <Avatar key={agent.id} className="size-6 border-2 border-background ring-1 ring-border/5">
-                              <AvatarImage src={agent.avatarUrl} alt={agent.name} />
-                              <AvatarFallback className="text-[8px]">{agent.name.split(" ").map((p) => p[0]).join("")}</AvatarFallback>
-                            </Avatar>
-                          ))}
-                          {fee.agentIds.length > 3 && (
-                            <div className="flex size-6 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground border-2 border-background ring-1 ring-border/5">
-                              +{fee.agentIds.length - 3}
-                            </div>
-                          )}
-                          {fee.agentIds.length === 0 && (
-                            <span className="text-xs text-muted-foreground italic">None</span>
-                          )}
-                        </div>
+                        <AgentAvatarStack 
+                          agents={agents.filter(a => fee.agentIds.includes(a.id)).map(a => ({ name: a.name, avatarUrl: a.avatarUrl }))} 
+                          max={3} 
+                          size="sm"
+                        />
                       </div>
                     )}
                   </TableCell>

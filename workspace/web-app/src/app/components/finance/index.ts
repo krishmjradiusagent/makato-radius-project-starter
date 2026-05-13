@@ -40,4 +40,7 @@ export type { FinanceInputProps } from "./finance-input";
 export { FinanceSideSummary } from "./finance-side-summary";
 export type { FinanceSideSummaryData, FinanceSideSummaryProps } from "./finance-side-summary";
 
+export { AgentAvatarStack } from "./agent-avatar-stack";
+export type { AgentAvatar, AgentAvatarStackProps } from "./agent-avatar-stack";
+
 export { formatCurrency, formatPercentage, calculatePercentage } from "./utils";
