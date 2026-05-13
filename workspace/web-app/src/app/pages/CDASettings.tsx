@@ -120,6 +120,7 @@ type AgentAssignment = {
 };
 
 type ArchiveTarget = { type: "plan" | "fee"; id: string; name: string };
+type UnassignDefaultsTarget = { type: "plan" | "fee"; id: string; name: string };
 
 type DuplicateTarget = { type: "plan"; plan: CommissionPlan } | { type: "fee"; fee: FeeRecord };
 
@@ -1601,6 +1602,7 @@ export function CDASettings() {
     assignDefaultsSource: AssignDefaultsSource;
     archiveTarget: ArchiveTarget | null;
     duplicateTarget: DuplicateTarget | null;
+    unassignDefaultsTarget: UnassignDefaultsTarget | null;
     clearAssignmentTarget: AgentAssignment | null;
     previewAssignment: AgentAssignment | null;
     dealsAssignment: AgentAssignment | null;
@@ -1623,6 +1625,7 @@ export function CDASettings() {
     assignDefaultsSource: { from: "bulk" },
     archiveTarget: null,
     duplicateTarget: null,
+    unassignDefaultsTarget: null,
     clearAssignmentTarget: null,
     previewAssignment: null,
     dealsAssignment: null,
@@ -2044,6 +2047,55 @@ export function CDASettings() {
     toast("Default assignment cleared");
   }
 
+  function requestUnassignPlanDefaults(plan: CommissionPlan) {
+    setState((current) => ({
+      ...current,
+      unassignDefaultsTarget: { type: "plan", id: plan.id, name: plan.name },
+    }));
+  }
+
+  function requestUnassignFeeDefaults(fee: FeeRecord) {
+    setState((current) => ({
+      ...current,
+      unassignDefaultsTarget: { type: "fee", id: fee.id, name: fee.name },
+    }));
+  }
+
+  function confirmUnassignDefaults() {
+    if (!state.unassignDefaultsTarget) return;
+
+    const target = state.unassignDefaultsTarget;
+    setState((current) => {
+      const nextAssignments =
+        target.type === "plan"
+          ? current.defaultAssignments
+              .map((assignment) =>
+                assignment.planId === target.id
+                  ? { ...assignment, planId: null }
+                  : assignment,
+              )
+              .filter((assignment) => assignment.planId !== null || assignment.feeIds.length > 0)
+          : current.defaultAssignments
+              .map((assignment) =>
+                assignment.feeIds.includes(target.id)
+                  ? {
+                      ...assignment,
+                      feeIds: assignment.feeIds.filter((feeId) => feeId !== target.id),
+                    }
+                  : assignment,
+              )
+              .filter((assignment) => assignment.planId !== null || assignment.feeIds.length > 0);
+
+      return {
+        ...current,
+        defaultAssignments: nextAssignments,
+        unassignDefaultsTarget: null,
+      };
+    });
+
+    toast(target.type === "plan" ? "Plan defaults unassigned" : "Fee defaults unassigned");
+  }
+
   function editAssignment(assignment: AgentAssignment) {
     const agent = agents.find((a) => a.id === assignment.agentId);
     setState((current) => ({
@@ -2141,7 +2193,7 @@ export function CDASettings() {
                         emptyActionLabel="Assign"
                         onEmptyAction={() => openPlanDefaults(plan, "assign")}
                         onEditDefaults={() => openPlanDefaults(plan, "edit")}
-                        onUnassignDefaults={() => openPlanDefaults(plan, "edit")}
+                        onUnassignDefaults={() => requestUnassignPlanDefaults(plan)}
                       />
                     </TableCell>
                     <TableCell className="pr-6 text-right">
@@ -2327,7 +2379,7 @@ export function CDASettings() {
                           emptyActionLabel="Assign"
                           onEmptyAction={() => openFeeDefaults(fee, "assign")}
                           onEditDefaults={() => openFeeDefaults(fee, "edit")}
-                          onUnassignDefaults={() => openFeeDefaults(fee, "edit")}
+                          onUnassignDefaults={() => requestUnassignFeeDefaults(fee)}
                         />
                       )}
                     </TableCell>
@@ -2551,6 +2603,28 @@ export function CDASettings() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={confirmArchive} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               Archive
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={Boolean(state.unassignDefaultsTarget)}
+        onOpenChange={(open) => { if (!open) setState((current) => ({ ...current, unassignDefaultsTarget: null })); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unassign all defaults?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {state.unassignDefaultsTarget?.type === "plan"
+                ? `Remove ${state.unassignDefaultsTarget.name} from all assigned agents.`
+                : `Remove ${state.unassignDefaultsTarget?.name} from all assigned agents.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmUnassignDefaults} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Unassign all
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
