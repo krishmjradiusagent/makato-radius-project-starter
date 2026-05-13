@@ -1,4 +1,4 @@
-import { createBrowserRouter } from "react-router";
+import { createBrowserRouter, Outlet } from "react-router";
 import { BreakdownPage } from "./pages/BreakdownPage";
 import { TeamLeadReview } from "./pages/TeamLeadReview";
 import { AuditorVerification } from "./pages/AuditorVerification";
@@ -14,70 +14,78 @@ import { CDAInsertionMap } from "./pages/CDAInsertionMap";
 import { CDACalculatorBreakdown } from "./pages/CDACalculatorBreakdown";
 import { CommissionBreakdown } from "./pages/CommissionBreakdown";
 import { TransactionDetail } from "./pages/TransactionDetail";
+import { RootErrorBoundary } from "./components/RootErrorBoundary";
 
 export const router = createBrowserRouter([
   {
     path: "/",
-    Component: CDASettings,
-  },
-  {
-    path: "/breakdown",
-    Component: BreakdownPage,
-  },
-  {
-    path: "/team-lead-review",
-    Component: TeamLeadReview,
-  },
-  {
-    path: "/auditor-verification",
-    Component: AuditorVerification,
-  },
-  {
-    path: "/cda-settings",
-    Component: CDASettings,
-  },
-  {
-    path: "/deal-terms",
-    Component: TransactionDetail,
-  },
-  {
-    path: "/agent-confirmation",
-    Component: AgentConfirmation,
-  },
-  {
-    path: "/commission-plan-builder",
-    Component: CommissionPlanBuilder,
-  },
-  {
-    path: "/fee-type-builder",
-    Component: FeeTypeBuilder,
-  },
-  {
-    path: "/assign-defaults",
-    Component: AssignDefaults,
-  },
-  {
-    path: "/finalized-pdf",
-    Component: FinalizedPDFPage,
-  },
-  {
-    path: "/edge-cases",
-    Component: EdgeCasesPage,
-  },
-  {
-    path: "/insertion-map",
-    Component: CDAInsertionMap,
-  },
-  {
-    path: "/calculator-breakdown",
-    Component: CDACalculatorBreakdown,
-  },
-  {
-    path: "/cda/commission-breakdown",
-    Component: CommissionBreakdown,
-  },
-  {
-    path: "/transaction-detail",
-    Component: TransactionDetail,
+    element: <Outlet />,
+    errorElement: <RootErrorBoundary />,
+    children: [
+      {
+        index: true,
+        Component: CDASettings,
+      },
+      {
+        path: "breakdown",
+        Component: BreakdownPage,
+      },
+      {
+        path: "team-lead-review",
+        Component: TeamLeadReview,
+      },
+      {
+        path: "auditor-verification",
+        Component: AuditorVerification,
+      },
+      {
+        path: "cda-settings",
+        Component: CDASettings,
+      },
+      {
+        path: "deal-terms",
+        Component: TransactionDetail,
+      },
+      {
+        path: "agent-confirmation",
+        Component: AgentConfirmation,
+      },
+      {
+        path: "commission-plan-builder",
+        Component: CommissionPlanBuilder,
+      },
+      {
+        path: "fee-type-builder",
+        Component: FeeTypeBuilder,
+      },
+      {
+        path: "assign-defaults",
+        Component: AssignDefaults,
+      },
+      {
+        path: "finalized-pdf",
+        Component: FinalizedPDFPage,
+      },
+      {
+        path: "edge-cases",
+        Component: EdgeCasesPage,
+      },
+      {
+        path: "insertion-map",
+        Component: CDAInsertionMap,
+      },
+      {
+        path: "calculator-breakdown",
+        Component: CDACalculatorBreakdown,
+      },
+      {
+        path: "cda/commission-breakdown",
+        Component: CommissionBreakdown,
+      },
+      {
+        path: "transaction-detail",
+        Component: TransactionDetail,
+      },
+    ],
   },
 ]);

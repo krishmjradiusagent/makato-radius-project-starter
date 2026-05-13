@@ -34,8 +34,88 @@ import {
   Users,
   DollarSign,
   TrendingUp,
+  ChevronDown,
 } from "lucide-react";
 import { cn } from "../components/ui/utils";
+import { Checkbox } from "../components/ui/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../components/ui/dropdown-menu";
+
+const dealTypeOptions = ["Buyer", "Seller", "Lease", "Landlord"];
+
+function DealTypeMultiSelect({
+  selectedTypes,
+  onChange,
+}: {
+  selectedTypes: Record<string, boolean>;
+  onChange: (types: Record<string, boolean>) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selectedKeys = Object.keys(selectedTypes).filter((k) => selectedTypes[k as keyof typeof selectedTypes]);
+
+  const allSelected = selectedKeys.length === dealTypeOptions.length;
+  let triggerLabel = "Select deal types";
+  if (allSelected) {
+    triggerLabel = "Selected all deal types";
+  } else if (selectedKeys.length === 1) {
+    triggerLabel = selectedKeys[0].charAt(0).toUpperCase() + selectedKeys[0].slice(1);
+  } else if (selectedKeys.length > 1) {
+    triggerLabel = `${selectedKeys[0].charAt(0).toUpperCase() + selectedKeys[0].slice(1)} +${selectedKeys.length - 1} others`;
+  }
+
+  function toggle(type: string) {
+    const key = type.toLowerCase();
+    onChange({
+      ...selectedTypes,
+      [key]: !selectedTypes[key as keyof typeof selectedTypes],
+    });
+  }
+
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" className="h-10 w-full justify-between font-normal px-3 overflow-hidden">
+          <span className={cn("truncate text-sm", selectedKeys.length === 0 ? "text-muted-foreground" : "text-foreground font-medium")}>
+            {triggerLabel}
+          </span>
+          <ChevronDown className="size-4 text-muted-foreground shrink-0 ml-2" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="min-w-[var(--radix-dropdown-menu-trigger-width)]" align="start">
+        <DropdownMenuItem
+          onSelect={(e) => e.preventDefault()}
+          onClick={() => {
+            const nextAllSelected = !allSelected;
+            const next: any = {};
+            dealTypeOptions.forEach((opt) => {
+              next[opt.toLowerCase()] = nextAllSelected;
+            });
+            onChange(next);
+          }}
+          className="gap-3 cursor-pointer border-b rounded-none pb-2 mb-1"
+        >
+          <Checkbox checked={allSelected} className="pointer-events-none" />
+          <span className="flex-1 text-sm font-medium">Select All</span>
+        </DropdownMenuItem>
+        {dealTypeOptions.map((type) => (
+          <DropdownMenuItem
+            key={type}
+            onSelect={(e) => e.preventDefault()}
+            onClick={() => toggle(type)}
+            className="gap-3 cursor-pointer"
+          >
+            <Checkbox checked={Boolean(selectedTypes[type.toLowerCase() as keyof typeof selectedTypes])} className="pointer-events-none" />
+            <span className="flex-1 text-sm font-medium">{type}</span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 export function CommissionPlanBuilder() {
   const [planName, setPlanName] = useState("80/20 Standard");
@@ -160,340 +240,316 @@ export function CommissionPlanBuilder() {
           {/* Left Builder Form */}
           <div className="space-y-6">
             {/* A. Basic Details */}
-            <section>
-              <CDASectionHeader title="Basic Details" />
-              <Card>
-                <CardContent className="pt-6 space-y-4">
-                  <div>
-                    <Label htmlFor="plan-name">Plan Name</Label>
-                    <Input
-                      id="plan-name"
-                      value={planName}
-                      onChange={(e) => setPlanName(e.target.value)}
-                      placeholder="e.g., 80/20 Standard"
-                      className="mt-1.5"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="description">Description</Label>
-                    <Textarea
-                      id="description"
-                      placeholder="Optional description for internal use..."
-                      className="mt-1.5 min-h-[80px]"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="plan-status">Plan Status</Label>
-                    <Select defaultValue="draft">
-                      <SelectTrigger id="plan-status" className="mt-1.5">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="active">Active</SelectItem>
-                        <SelectItem value="draft">Draft</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </CardContent>
-              </Card>
+            <section className="bg-background border rounded-lg overflow-hidden shadow-sm">
+              <CDASectionHeader title="Basic Details" className="bg-muted/30" />
+              <div className="p-4 space-y-4">
+                <div>
+                  <Label htmlFor="plan-name">Plan Name</Label>
+                  <Input
+                    id="plan-name"
+                    value={planName}
+                    onChange={(e) => setPlanName(e.target.value)}
+                    placeholder="e.g., 80/20 Standard"
+                    className="mt-1.5"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea
+                    id="description"
+                    placeholder="Optional description for internal use..."
+                    className="mt-1.5 min-h-[80px]"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="plan-status">Plan Status</Label>
+                  <Select defaultValue="draft">
+                    <SelectTrigger id="plan-status" className="mt-1.5">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="draft">Draft</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </section>
 
             {/* B. Plan Type */}
-            <section>
-              <CDASectionHeader title="Plan Type" />
-              <Card>
-                <CardContent className="pt-6">
-                  <Tabs value={planType} onValueChange={(v) => setPlanType(v as any)}>
-                    <TabsList className="grid w-full grid-cols-2">
-                      <TabsTrigger value="standard">Standard</TabsTrigger>
-                      <TabsTrigger value="tiered">Tiered</TabsTrigger>
-                    </TabsList>
-                  </Tabs>
-                  <p className="text-xs text-muted-foreground mt-3">
-                    {planType === "standard"
-                      ? "Standard plans use fixed agent/team splits for all deals."
-                      : "Tiered plans adjust splits based on deal volume or units."}
-                  </p>
-                </CardContent>
-              </Card>
+            <section className="bg-background border rounded-lg overflow-hidden shadow-sm">
+              <CDASectionHeader title="Plan Type" className="bg-muted/30" />
+              <div className="p-4">
+                <Select value={planType} onValueChange={(v) => setPlanType(v as any)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="standard">Standard</SelectItem>
+                    <SelectItem value="tiered">Tiered</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-3">
+                  {planType === "standard"
+                    ? "Standard plans use fixed agent/team splits for all deals."
+                    : "Tiered plans adjust splits based on deal volume or units."}
+                </p>
+              </div>
             </section>
 
             {/* C. Standard Plan Fields */}
             {planType === "standard" && (
-              <section>
-                <CDASectionHeader title="Split Configuration" />
-                <Card>
-                  <CardContent className="pt-6 space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="agent-split">Agent Split %</Label>
-                        <FinanceInput
-                          id="agent-split"
-                          variant="percentage"
-                          value={agentSplit}
-                          onChange={(e) => setAgentSplit(e.target.value)}
-                          className="mt-1.5"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="team-split">Team Split %</Label>
-                        <FinanceInput
-                          id="team-split"
-                          variant="percentage"
-                          value={teamSplit}
-                          onChange={(e) => setTeamSplit(e.target.value)}
-                          className="mt-1.5"
-                        />
-                      </div>
-                    </div>
-                    <div
-                      className={cn(
-                        "flex items-center gap-2 text-xs p-2 rounded",
-                        splitValid
-                          ? "bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-400"
-                          : "bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400"
-                      )}
-                    >
-                      {splitValid ? (
-                        <CheckCircle2 className="size-3" />
-                      ) : (
-                        <AlertCircle className="size-3" />
-                      )}
-                      <span>
-                        Split total: {splitTotal}% {splitValid ? "(Valid)" : "(Must equal 100%)"}
-                      </span>
-                    </div>
-
-                    <Separator />
-
+              <section className="bg-background border rounded-lg overflow-hidden shadow-sm">
+                <CDASectionHeader title="Split Configuration" className="bg-muted/30" />
+                <div className="p-4 space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <Label htmlFor="cap-amount">Cap Amount</Label>
+                      <Label htmlFor="agent-split">Agent Split %</Label>
                       <FinanceInput
-                        id="cap-amount"
-                        variant="currency"
-                        value={capAmount}
-                        onChange={(e) => setCapAmount(e.target.value)}
+                        id="agent-split"
+                        variant="percentage"
+                        value={agentSplit}
+                        onChange={(e) => setAgentSplit(e.target.value)}
                         className="mt-1.5"
                       />
                     </div>
-
                     <div>
-                      <Label htmlFor="cap-anniversary">Cap Anniversary Basis</Label>
-                      <Select defaultValue="calendar-year">
-                        <SelectTrigger id="cap-anniversary" className="mt-1.5">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="calendar-year">Calendar Year</SelectItem>
-                          <SelectItem value="anniversary">Anniversary Date</SelectItem>
-                          <SelectItem value="rolling">Rolling 12 Months</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <Label htmlFor="team-split">Team Split %</Label>
+                      <FinanceInput
+                        id="team-split"
+                        variant="percentage"
+                        value={teamSplit}
+                        onChange={(e) => setTeamSplit(e.target.value)}
+                        className="mt-1.5"
+                      />
                     </div>
+                  </div>
+                  <div
+                    className={cn(
+                      "flex items-center gap-2 text-xs p-2 rounded",
+                      splitValid
+                        ? "bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-400"
+                        : "bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400"
+                    )}
+                  >
+                    {splitValid ? (
+                      <CheckCircle2 className="size-3" />
+                    ) : (
+                      <AlertCircle className="size-3" />
+                    )}
+                    <span>
+                      Split total: {splitTotal}% {splitValid ? "(Valid)" : "(Must equal 100%)"}
+                    </span>
+                  </div>
 
-                    <Separator />
+                  <Separator />
 
-                    <div>
-                      <Label>Deal Types</Label>
-                      <div className="grid grid-cols-2 gap-3 mt-2">
-                        {Object.entries(dealTypes).map(([key, checked]) => (
-                          <label key={key} className="flex items-center gap-2 text-sm cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={(e) =>
-                                setDealTypes({ ...dealTypes, [key]: e.target.checked })
-                              }
-                              className="rounded"
-                            />
-                            {key.charAt(0).toUpperCase() + key.slice(1)}
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </section>
-            )}
-
-            {/* D. Tiered Plan Fields */}
-            {planType === "tiered" && (
-              <section>
-                <CDASectionHeader title="Tier Configuration" />
-                <Card>
-                  <CardContent className="pt-6 space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="based-on">Based On</Label>
-                        <Select defaultValue="units">
-                          <SelectTrigger id="based-on" className="mt-1.5">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="units">Units (Deals)</SelectItem>
-                            <SelectItem value="volume">Volume (GCI)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <Label htmlFor="reset-period">Reset Period</Label>
-                        <Select defaultValue="yearly">
-                          <SelectTrigger id="reset-period" className="mt-1.5">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="monthly">Monthly</SelectItem>
-                            <SelectItem value="quarterly">Quarterly</SelectItem>
-                            <SelectItem value="yearly">Yearly</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-
-                    <Separator />
-
-                    <div>
-                      <Label className="mb-3 block">Tier Structure</Label>
-                      <div className="space-y-3">
-                        {tiers.map((tier, index) => (
-                          <div key={tier.id} className="p-3 border rounded-lg">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-sm font-medium">Tier {index + 1}</span>
-                              {tiers.length > 1 && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 text-xs"
-                                  onClick={() => setTiers(tiers.filter((t) => t.id !== tier.id))}
-                                >
-                                  Remove
-                                </Button>
-                              )}
-                            </div>
-                            <div className="grid grid-cols-3 gap-3 text-sm">
-                              <div>
-                                <p className="text-xs text-muted-foreground mb-1">Range</p>
-                                <p className="font-medium">
-                                  {tier.rangeStart}–{tier.rangeEnd || "∞"} deals
-                                </p>
-                              </div>
-                              <div>
-                                <p className="text-xs text-muted-foreground mb-1">Agent Split</p>
-                                <p className="font-medium">{tier.splitPercentage}%</p>
-                              </div>
-                              <div>
-                                <p className="text-xs text-muted-foreground mb-1">Team Split</p>
-                                <p className="font-medium">{100 - tier.splitPercentage}%</p>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                        <Button variant="outline" className="w-full" size="sm">
-                          <Plus className="size-4 mr-2" />
-                          Add Tier
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </section>
-            )}
-
-            {/* E. Cap Behavior */}
-            <section>
-              <CDASectionHeader title="Cap Behavior" />
-              <Card>
-                <CardContent className="pt-6 space-y-4">
                   <div>
-                    <Label htmlFor="plan-cap">Plan Cap Amount</Label>
+                    <Label htmlFor="cap-amount">Cap Amount</Label>
                     <FinanceInput
-                      id="plan-cap"
+                      id="cap-amount"
                       variant="currency"
                       value={capAmount}
                       onChange={(e) => setCapAmount(e.target.value)}
                       className="mt-1.5"
                     />
                   </div>
-                  <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
-                    <Switch
-                      id="override-cap"
-                      checked={overrideCap}
-                      onCheckedChange={setOverrideCap}
+
+                  <div>
+                    <Label htmlFor="cap-anniversary">Cap Anniversary Basis</Label>
+                    <Select defaultValue="calendar-year">
+                      <SelectTrigger id="cap-anniversary" className="mt-1.5">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="calendar-year">Calendar Year</SelectItem>
+                        <SelectItem value="anniversary">Anniversary Date</SelectItem>
+                        <SelectItem value="rolling">Rolling 12 Months</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <Separator />
+
+                  <div>
+                    <Label className="mb-1.5 block">Deal Types</Label>
+                    <DealTypeMultiSelect
+                      selectedTypes={dealTypes}
+                      onChange={setDealTypes}
                     />
-                    <div className="flex-1">
-                      <label htmlFor="override-cap" className="text-sm font-medium cursor-pointer">
-                        Override existing agent cap
-                      </label>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        If enabled, this plan cap replaces the agent cap on file.
-                      </p>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {/* D. Tiered Plan Fields */}
+            {planType === "tiered" && (
+              <section className="bg-background border rounded-lg overflow-hidden shadow-sm">
+                <CDASectionHeader title="Tier Configuration" className="bg-muted/30" />
+                <div className="p-4 space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="based-on">Based On</Label>
+                      <Select defaultValue="units">
+                        <SelectTrigger id="based-on" className="mt-1.5">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="units">Units (Deals)</SelectItem>
+                          <SelectItem value="volume">Volume (GCI)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="reset-period">Reset Period</Label>
+                      <Select defaultValue="yearly">
+                        <SelectTrigger id="reset-period" className="mt-1.5">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="monthly">Monthly</SelectItem>
+                          <SelectItem value="quarterly">Quarterly</SelectItem>
+                          <SelectItem value="yearly">Yearly</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
+
+                  <Separator />
+
+                  <div>
+                    <Label className="mb-3 block text-sm font-semibold">Tier Structure</Label>
+                    <div className="space-y-3">
+                      {tiers.map((tier, index) => (
+                        <div key={tier.id} className="p-3 border rounded-lg bg-muted/20">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium">Tier {index + 1}</span>
+                            {tiers.length > 1 && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 text-xs"
+                                onClick={() => setTiers(tiers.filter((t) => t.id !== tier.id))}
+                              >
+                                Remove
+                              </Button>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-3 gap-3 text-sm">
+                            <div>
+                              <p className="text-xs text-muted-foreground mb-1">Range</p>
+                              <p className="font-medium">
+                                {tier.rangeStart}–{tier.rangeEnd || "∞"} deals
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground mb-1">Agent Split</p>
+                              <p className="font-medium">{tier.splitPercentage}%</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground mb-1">Team Split</p>
+                              <p className="font-medium">{100 - tier.splitPercentage}%</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      <Button variant="outline" className="w-full h-9" size="sm">
+                        <Plus className="size-4 mr-2" />
+                        Add Tier
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {/* E. Cap Behavior */}
+            <section className="bg-background border rounded-lg overflow-hidden shadow-sm">
+              <CDASectionHeader title="Cap Behavior" className="bg-muted/30" />
+              <div className="p-4 space-y-4">
+                <div>
+                  <Label htmlFor="plan-cap">Plan Cap Amount</Label>
+                  <FinanceInput
+                    id="plan-cap"
+                    variant="currency"
+                    value={capAmount}
+                    onChange={(e) => setCapAmount(e.target.value)}
+                    className="mt-1.5"
+                  />
+                </div>
+                <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                  <Switch
+                    id="override-cap"
+                    checked={overrideCap}
+                    onCheckedChange={setOverrideCap}
+                  />
+                  <div className="flex-1">
+                    <label htmlFor="override-cap" className="text-sm font-medium cursor-pointer">
+                      Override existing agent cap
+                    </label>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      If enabled, this plan cap replaces the agent cap on file.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </section>
 
             {/* F. Default Fees */}
-            <section>
-              <CDASectionHeader title="Default Fees" />
-              <Card>
-                <CardContent className="pt-6">
-                  <Label className="mb-3 block">Apply these fees by default</Label>
-                  <div className="space-y-2">
-                    {[
-                      { key: "tcFee", label: "TC Fee", amount: "$500" },
-                      { key: "rmFee", label: "RM Fee", amount: "$300" },
-                      { key: "eoFee", label: "E&O Fee", amount: "$125" },
-                      { key: "complianceReview", label: "Compliance Review", amount: "$250" },
-                    ].map((fee) => (
-                      <label
-                        key={fee.key}
-                        className="flex items-center justify-between p-3 border rounded-lg cursor-pointer hover:bg-muted/50"
-                      >
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="checkbox"
-                            checked={defaultFees[fee.key as keyof typeof defaultFees]}
-                            onChange={(e) =>
-                              setDefaultFees({
-                                ...defaultFees,
-                                [fee.key]: e.target.checked,
-                              })
-                            }
-                            className="rounded"
-                          />
-                          <span className="text-sm font-medium">{fee.label}</span>
-                        </div>
-                        <span className="text-sm text-muted-foreground">{fee.amount}</span>
-                      </label>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
+            <section className="bg-background border rounded-lg overflow-hidden shadow-sm">
+              <CDASectionHeader title="Default Fees" className="bg-muted/30" />
+              <div className="p-4">
+                <Label className="mb-3 block text-sm font-semibold">Apply these fees by default</Label>
+                <div className="space-y-2">
+                  {[
+                    { key: "tcFee", label: "TC Fee", amount: "$500" },
+                    { key: "rmFee", label: "RM Fee", amount: "$300" },
+                    { key: "eoFee", label: "E&O Fee", amount: "$125" },
+                    { key: "complianceReview", label: "Compliance Review", amount: "$250" },
+                  ].map((fee) => (
+                    <label
+                      key={fee.key}
+                      className="flex items-center justify-between p-3 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Checkbox
+                          checked={defaultFees[fee.key as keyof typeof defaultFees]}
+                          onCheckedChange={(checked) =>
+                            setDefaultFees({
+                              ...defaultFees,
+                              [fee.key]: Boolean(checked),
+                            })
+                          }
+                        />
+                        <span className="text-sm font-medium">{fee.label}</span>
+                      </div>
+                      <span className="text-sm text-muted-foreground">{fee.amount}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
             </section>
 
             {/* G. Assignment Preview */}
-            <section>
-              <CDASectionHeader title="Assignment" />
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="flex items-center gap-3 p-4 bg-muted/50 rounded-lg">
-                    <Users className="size-5 text-muted-foreground" />
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">Assigned Agents</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        0 agents assigned to this plan
-                      </p>
-                    </div>
-                    <Button variant="outline" size="sm" disabled>
-                      Assign After Saving
-                    </Button>
+            <section className="bg-background border rounded-lg overflow-hidden shadow-sm">
+              <CDASectionHeader title="Assignment" className="bg-muted/30" />
+              <div className="p-4">
+                <div className="flex items-center gap-3 p-4 bg-muted/50 rounded-lg border border-dashed">
+                  <Users className="size-5 text-muted-foreground" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">Assigned Agents</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      0 agents assigned to this plan
+                    </p>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-3 p-2 bg-blue-50 dark:bg-blue-950/20 rounded">
-                    Save the plan first, then assign it to specific agents.
-                  </p>
-                </CardContent>
-              </Card>
+                  <Button variant="outline" size="sm" disabled className="h-8 text-xs">
+                    Assign After Saving
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-3 p-2 bg-blue-50 dark:bg-blue-950/20 rounded">
+                  Save the plan first, then assign it to specific agents.
+                </p>
+              </div>
             </section>
           </div>
 
@@ -613,7 +669,7 @@ export function CommissionPlanBuilder() {
       </div>
 
       {/* Sticky Action Bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-10 border-t bg-background px-8 py-3">
+      <div className="sticky bottom-0 z-20 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-8 py-[14px] mt-auto">
         <div className="max-w-[1320px] mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="text-sm text-muted-foreground">

@@ -98,6 +98,13 @@ import {
   AccordionTrigger,
 } from "../components/ui/accordion";
 import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "../components/ui/card";
+import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
@@ -114,7 +121,7 @@ type Status =
   | "pending_agent_confirmation"
   | "finalized";
 type Role = "agent" | "team_lead" | "radius";
-type DeductionType = "credit" | "referral" | "pre_split" | "post_split" | "radius_fee";
+type DeductionType = "credit" | "referral" | "pre_split" | "agent_pre_split" | "post_split" | "radius_fee";
 
 interface Deduction {
   id: string;
@@ -192,7 +199,7 @@ const INITIAL_DATA: TransactionData = {
     {
       id: "s1",
       type: "buyer",
-      percentage: 100,
+      percentage: 50,
       agents: [
         {
           id: "a1",
@@ -222,8 +229,18 @@ const INITIAL_DATA: TransactionData = {
     {
       id: "s2",
       type: "listing",
-      percentage: 0,
-      agents: [],
+      percentage: 50,
+      agents: [
+        {
+          id: "a3",
+          name: "Sarah Chen",
+          avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=150&auto=format&fit=crop",
+          allocationPct: 100,
+          planName: "75/25 Standard",
+          planSplit: 0.75,
+          deductions: [],
+        },
+      ],
     },
   ],
 };
@@ -275,12 +292,12 @@ const INITIAL_NOTES: Note[] = [
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 interface AgentCalcs {
-  agentBasis: number;
-  preSplitDeds: Deduction[];
-  preSplitTotal: number;
-  adjustedBasis: number;
-  postSplitCommission: number;
-  postSplitDeds: Deduction[];
+  agentBasis: number; // Gross after shared deductions * allocation %
+  agentPreSplitDeds: Deduction[]; // [TL/Admin ONLY] Internal adjustments
+  agentPreSplitTotal: number;
+  splitBasis: number; // agentBasis - agentPreSplitTotal
+  postSplitCommission: number; // splitBasis * planSplit
+  postSplitDeds: Deduction[]; // [AGENT EDITABLE] TC, Admin, etc.
   postSplitTotal: number;
   netAgentCommission: number;
   companyDollar: number;
@@ -288,29 +305,30 @@ interface AgentCalcs {
 
 function calcAgentFinancials(agent: AgentAllocation, sideAmount: number): AgentCalcs {
   const agentBasis = sideAmount * (agent.allocationPct / 100);
+  const deductions = agent.deductions || [];
   
-  // pre-split: referral, credit, and pre_split deductions reduce basis before the plan split
-  const preSplitDeds = agent.deductions.filter(
-    (d) => d.type === "referral" || d.type === "credit" || d.type === "pre_split"
-  );
-  const preSplitTotal = preSplitDeds.reduce((s, d) => s + d.amount, 0);
-  const adjustedBasis = Math.max(0, agentBasis - preSplitTotal);
+  // 1. Agent Pre-split (Internal)
+  const agentPreSplitDeds = deductions.filter(d => d.type === "agent_pre_split");
+  const agentPreSplitTotal = agentPreSplitDeds.reduce((s, d) => s + d.amount, 0);
+  const splitBasis = Math.max(0, agentBasis - agentPreSplitTotal);
   
-  const postSplitCommission = adjustedBasis * agent.planSplit;
+  // 2. Post-split commission calculation
+  const postSplitCommission = splitBasis * agent.planSplit;
   
-  // post-split: marketing fees, platform fees, and other direct agent charges
-  const postSplitDeds = agent.deductions.filter(
+  // 3. Post-split deductions (Agent editable)
+  const postSplitDeds = deductions.filter(
     (d) => d.type === "post_split" || d.type === "radius_fee"
   );
   const postSplitTotal = postSplitDeds.reduce((s, d) => s + d.amount, 0);
   
   const netAgentCommission = Math.max(0, postSplitCommission - postSplitTotal);
-  const companyDollar = adjustedBasis - postSplitCommission;
+  const companyDollar = splitBasis - postSplitCommission;
+
   return {
     agentBasis,
-    preSplitDeds,
-    preSplitTotal,
-    adjustedBasis,
+    agentPreSplitDeds,
+    agentPreSplitTotal,
+    splitBasis,
     postSplitCommission,
     postSplitDeds,
     postSplitTotal,
@@ -410,12 +428,12 @@ function SpreadsheetRow({
       onClick={onClick}
       className={cn(
         "group flex items-center justify-between py-2 px-4 cursor-pointer transition-colors border-l-2 border-transparent",
-        isSelected ? "bg-primary/5 border-primary" : "hover:bg-muted/30",
+        isSelected ? "bg-[#5A5FF2]/5 border-[#5A5FF2]" : "hover:bg-muted/30",
         variant === "header" && "bg-muted/20 py-1.5",
         variant === "total" &&
-          "bg-primary/[0.02] border-t border-b border-border/50 font-semibold",
+          "bg-[#5A5FF2]/[0.02] border-t border-b border-border/50 font-semibold",
         variant === "danger" && "text-destructive/80",
-        changed && "bg-accent/40 border-l-2 border-primary",
+        changed && "bg-accent/40 border-l-2 border-[#5A5FF2]",
         className
       )}
     >
@@ -432,7 +450,7 @@ function SpreadsheetRow({
         {changed && (
           <Badge
             variant="secondary"
-            className="h-3.5 text-[9px] px-1 bg-primary/10 text-primary font-medium"
+            className="h-3.5 text-[9px] px-1 bg-[#5A5FF2]/10 text-[#5A5FF2] font-medium"
           >
             updated
           </Badge>
@@ -624,14 +642,18 @@ export function CommissionBreakdown() {
   // ─── Calculations ────────────────────────────────────────────────────────────
   const gciTotal = data.purchasePrice * (data.commissionRate / 100);
 
-  // Shared deductions: visible to all. Radius fee: hidden from agent.
-  const sharedDeductions = data.globalDeductions.filter((d) => d.type !== "radius_fee");
+  // Shared deductions: Brokerage, Compliance, Credits, Referral (Global pre-split)
+  const sharedDeductions = data.globalDeductions.filter((d) => 
+    d.type === "pre_split" || d.type === "referral" || d.type === "credit"
+  );
   const radiusDeductions = data.globalDeductions.filter((d) => d.type === "radius_fee");
+  
   const sharedDeductionTotal = sharedDeductions.reduce((s, d) => s + d.amount, 0);
   const radiusDeductionTotal = radiusDeductions.reduce((s, d) => s + d.amount, 0);
 
-  // Split basis is same for all roles (radius fee does NOT affect split basis)
-  const grossAfterDeductions = gciTotal - sharedDeductionTotal;
+  // Basis for side allocation calculation
+  const grossAfterShared = gciTotal - sharedDeductionTotal;
+  const grossAfterDeductions = grossAfterShared; // Alias for backward compatibility if used elsewhere
 
   // Flat list of all agents with their side context and calcs
   const allAgentCalcs = data.sides.flatMap((side) => {
@@ -792,6 +814,41 @@ export function CommissionBreakdown() {
     setNewNoteText("");
   };
 
+  const handleAddAgent = (sideType: "buyer" | "listing") => {
+    const isBuyer = sideType === "buyer";
+    const newId = `new_agent_${Date.now()}`;
+    const agentName = isBuyer ? "David Lee" : "Mike Ross";
+    
+    setData(prev => {
+      const newSides = prev.sides.map(side => {
+        if (side.type === sideType) {
+          const newAgent: AgentAllocation = isBuyer ? {
+            id: newId,
+            name: agentName,
+            allocationPct: 10,
+            planName: "80/20 Standard",
+            planSplit: 0.8,
+            deductions: [],
+          } : {
+            id: newId,
+            name: agentName,
+            allocationPct: 50,
+            planName: "75/25 Standard",
+            planSplit: 0.75,
+            deductions: [],
+          };
+          
+          return {
+            ...side,
+            agents: [...side.agents, newAgent]
+          };
+        }
+        return side;
+      });
+      return { ...prev, sides: newSides };
+    });
+  };
+
   // ─── Workflow Banner ──────────────────────────────────────────────────────────
 
   const renderWorkflowBanner = () => {
@@ -861,15 +918,15 @@ export function CommissionBreakdown() {
         }
         return (
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" className="h-9 px-4 text-xs">
+            <Button variant="ghost" size="sm" className="h-9 px-4 text-xs hover:bg-red-50 hover:text-red-600 transition-colors">
               Discard
             </Button>
-            <Button variant="outline" size="sm" className="h-9 px-4 text-xs">
+            <Button variant="outline" size="sm" className="h-9 px-4 text-xs border-[#5A5FF2] text-[#5A5FF2] hover:bg-[#5A5FF2]/5">
               Save Draft
             </Button>
             <Button
               size="sm"
-              className="h-9 px-6 text-xs gap-2"
+              className="h-9 px-6 text-xs gap-2 bg-[#5A5FF2] hover:bg-[#5A5FF2]/90 text-white font-bold shadow-sm"
               onClick={handleSendForTLReview}
             >
               <Send className="size-3.5" /> Submit for Approval
@@ -981,7 +1038,7 @@ export function CommissionBreakdown() {
         onClick={() => setSelectedNode(`agent-${agent.id}`)}
         className={cn(
           "group flex items-center justify-between py-3.5 px-4 cursor-pointer transition-all border-l-2 border-transparent",
-          isSelected ? "bg-primary/[0.03] border-primary" : "hover:bg-muted/40"
+          isSelected ? "bg-[#5A5FF2]/[0.03] border-[#5A5FF2]" : "hover:bg-muted/40"
         )}
       >
         <div className="flex items-center gap-3.5 min-w-0">
@@ -1061,11 +1118,66 @@ export function CommissionBreakdown() {
             )}
             <ChevronRight className={cn(
               "size-4 text-muted-foreground/30 transition-transform group-hover:translate-x-0.5",
-              isSelected && "text-primary/50"
+              isSelected && "text-[#5A5FF2]/50"
             )} />
           </div>
         </div>
       </div>
+    );
+  };
+
+  // ─── Post-Split Deductions Section ────────────────────────────────────────
+
+  const renderPostSplitDeductions = () => {
+    if (allAgentCalcs.length === 0) return null;
+    return (
+      <Card className="overflow-hidden border-border/60 shadow-sm">
+        <div className="flex items-center justify-between px-5 py-2.5 border-b border-border/50 bg-background">
+          <h3 className="text-[13px] font-bold text-foreground">04. Post-Split Deductions</h3>
+          {isEditable && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="h-6 text-[10px] gap-1.5 px-2 bg-background border-[#5A5FF2] text-[#5A5FF2] hover:bg-[#5A5FF2]/5 font-bold"
+              onClick={() => setIsDeductionOpen(true)}
+            >
+              <Plus className="size-3" /> Add Post-Split Deduction
+            </Button>
+          )}
+        </div>
+        <div className="divide-y divide-border/50">
+          {allAgentCalcs.map(({ agent, side, sideAmount, calcs }) => (
+            <div key={agent.id} className="px-5 py-3 flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[12px] font-bold text-foreground">{agent.name}</p>
+                  <p className="text-[11px] font-medium text-muted-foreground">Post-split commission: ${calcs.postSplitCommission.toLocaleString()}</p>
+                </div>
+              </div>
+              
+              {calcs.postSplitDeds.length > 0 ? (
+                <div className="space-y-1">
+                  {calcs.postSplitDeds.map(d => (
+                    <div key={d.id} className="flex items-center justify-between text-[11px]">
+                      <span className="text-muted-foreground">- {d.label}</span>
+                      <span className="text-muted-foreground tabular-nums">-${d.amount.toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-1">
+                  <span className="text-[11px] italic text-muted-foreground/50">No post-split deductions</span>
+                </div>
+              )}
+              
+              <div className="flex items-center justify-between pt-2 mt-1 border-t border-border/40">
+                <span className="text-[11px] font-bold text-foreground">Net commission</span>
+                <span className="text-[12px] font-bold tabular-nums text-foreground">${calcs.netAgentCommission.toLocaleString()}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
     );
   };
 
@@ -1075,7 +1187,7 @@ export function CommissionBreakdown() {
     if (allAgentCalcs.length === 0) return null;
     return (
       <div className="border rounded-lg bg-background overflow-hidden border-border/60">
-        <CDASectionHeader title="04. Agent Breakdown" className="bg-muted/20" />
+        <CDASectionHeader title="05. Agent Breakdown" className="bg-muted/20" />
         <Accordion type="multiple" className="divide-y divide-border/50">
           {allAgentCalcs.map(({ agent, side, sideAmount, calcs }) => (
             <AccordionItem key={agent.id} value={agent.id} className="border-none">
@@ -1111,62 +1223,83 @@ export function CommissionBreakdown() {
                     label="Allocation Basis"
                     value={calcs.agentBasis}
                     tooltip={`${agent.allocationPct}% of side distributable ($${sideAmount.toLocaleString()})`}
+                    variant="muted"
                   />
 
-                  {/* 2. Pre split deductions */}
-                  {calcs.preSplitDeds.length > 0 && (
-                    <Collapsible defaultOpen className="group/coll">
+                  {/* 2. Agent Pre-split deductions (Internal) */}
+                  {(role !== "agent" || calcs.agentPreSplitDeds.length > 0) && (
+                    <Collapsible defaultOpen={role !== "agent"} className="group/coll">
                       <CollapsibleTrigger asChild>
                         <div className="px-4 py-2 flex items-center justify-between cursor-pointer hover:bg-muted/30">
-                          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                            Pre-split deductions ({calcs.preSplitDeds.length})
-                          </p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                              Agent pre-split deductions
+                            </p>
+                            {role !== "agent" && (
+                              <Badge variant="outline" className="h-3.5 text-[8px] border-amber-200 text-amber-700 bg-amber-50 uppercase tracking-tighter px-1">Internal only</Badge>
+                            )}
+                          </div>
                           <ChevronDown className="size-3 text-muted-foreground transition-transform group-data-[state=open]/coll:rotate-180" />
                         </div>
                       </CollapsibleTrigger>
                       <CollapsibleContent>
-                        {calcs.preSplitDeds.map((d) => (
-                          <FinRow
-                            key={d.id}
-                            label={d.label}
-                            value={-d.amount}
-                            indent
-                            variant="muted"
-                          />
-                        ))}
+                        {calcs.agentPreSplitDeds.length > 0 ? (
+                          calcs.agentPreSplitDeds.map((d) => (
+                            <FinRow
+                              key={d.id}
+                              label={d.label}
+                              value={-d.amount}
+                              indent
+                              variant="muted"
+                            />
+                          ))
+                        ) : (
+                          <p className="px-8 py-1.5 text-[10px] text-muted-foreground/50 italic">No internal adjustments</p>
+                        )}
+                        {isEditable && role !== "agent" && (
+                          <div className="px-8 py-2">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="h-6 text-[9px] gap-1 px-1.5 text-amber-700 hover:bg-amber-50"
+                              onClick={() => setIsDeductionOpen(true)}
+                            >
+                              <Plus className="size-2.5" /> Add Adjustment
+                            </Button>
+                          </div>
+                        )}
                       </CollapsibleContent>
                     </Collapsible>
                   )}
 
-                  <Separator className="my-1" />
+                  <Separator className="my-1 opacity-50" />
 
                   <FinRow
-                    label="Split Basis (Gross After Deductions)"
-                    value={calcs.adjustedBasis}
+                    label="Split Basis (Basis - Adjustments)"
+                    value={calcs.splitBasis}
                     variant="subtotal"
-                    tooltip={`$${calcs.agentBasis.toLocaleString()} basis − $${calcs.preSplitTotal.toLocaleString()} pre-split deductions`}
                   />
 
                   {/* 3. Post split commission */}
                   <FinRow
-                    label={`Agent Split (${Math.round(agent.planSplit * 100)}%)`}
+                    label={`Post-Split Commission (${Math.round(agent.planSplit * 100)}% Plan)`}
                     value={calcs.postSplitCommission}
-                    tooltip={`${Math.round(agent.planSplit * 100)}% × $${calcs.adjustedBasis.toLocaleString()} adjusted basis`}
+                    tooltip={`${Math.round(agent.planSplit * 100)}% × $${calcs.splitBasis.toLocaleString()} split basis`}
                   />
 
-                  {/* 4. Post split deductions */}
-                  {calcs.postSplitDeds.length > 0 && (
-                    <Collapsible defaultOpen className="group/coll">
-                      <CollapsibleTrigger asChild>
-                        <div className="px-4 py-2 flex items-center justify-between cursor-pointer hover:bg-muted/30">
-                          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                            Post-split deductions ({calcs.postSplitDeds.length})
-                          </p>
-                          <ChevronDown className="size-3 text-muted-foreground transition-transform group-data-[state=open]/coll:rotate-180" />
-                        </div>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent>
-                        {calcs.postSplitDeds.map((d) => (
+                  {/* 4. Post split deductions (Agent editable) */}
+                  <Collapsible defaultOpen className="group/coll">
+                    <CollapsibleTrigger asChild>
+                      <div className="px-4 py-2 flex items-center justify-between cursor-pointer hover:bg-muted/30">
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                          Post-split deductions
+                        </p>
+                        <ChevronDown className="size-3 text-muted-foreground transition-transform group-data-[state=open]/coll:rotate-180" />
+                      </div>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      {calcs.postSplitDeds.length > 0 ? (
+                        calcs.postSplitDeds.map((d) => (
                           <FinRow
                             key={d.id}
                             label={d.label}
@@ -1174,55 +1307,42 @@ export function CommissionBreakdown() {
                             indent
                             variant="muted"
                           />
-                        ))}
-                      </CollapsibleContent>
-                    </Collapsible>
-                  )}
+                        ))
+                      ) : (
+                        <p className="px-8 py-1.5 text-[10px] text-muted-foreground/50 italic">No post-split deductions</p>
+                      )}
+                      {isEditable && (
+                        <div className="px-8 py-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-6 text-[9px] gap-1 px-2 border-[#5A5FF2] text-[#5A5FF2] hover:bg-[#5A5FF2]/5"
+                            onClick={() => setIsDeductionOpen(true)}
+                          >
+                            <Plus className="size-2.5" /> Add Deduction
+                          </Button>
+                        </div>
+                      )}
+                    </CollapsibleContent>
+                  </Collapsible>
 
                   <Separator className="my-1" />
 
                   {/* 5. Net agent commission */}
                   <FinRow
-                    label="Agent Net Commission"
+                    label="Net Commission Payout"
                     value={calcs.netAgentCommission}
                     variant="total"
                   />
 
-                  {/* 6. Company dollar */}
-                  <FinRow
-                    label="Company Dollar"
-                    value={calcs.companyDollar}
-                    variant="muted"
-                    tooltip={`${Math.round((1 - agent.planSplit) * 100)}% × $${calcs.adjustedBasis.toLocaleString()} company share`}
-                  />
-
-                  {/* Add deduction button */}
-                  {isEditable && (
-                    <div className="px-4 py-2.5 border-t border-border/30">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 text-[10px] gap-1 px-2 text-muted-foreground hover:text-foreground"
-                          >
-                            <Plus className="size-3" /> Add deduction
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="w-44">
-                          <DropdownMenuItem onClick={() => setIsDeductionOpen(true)}>
-                            Add referral fee
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => setIsDeductionOpen(true)}>
-                            Add post-split fee
-                          </DropdownMenuItem>
-                          {role !== "agent" && (
-                            <DropdownMenuItem onClick={() => setIsDeductionOpen(true)}>
-                              Add credit
-                            </DropdownMenuItem>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                  {role !== "agent" && (
+                    <div className="bg-muted/10 border-t border-border/40 mt-1">
+                      <FinRow
+                        label="Company Share (Company Dollar)"
+                        value={calcs.companyDollar}
+                        variant="muted"
+                        tooltip={`${Math.round((1 - agent.planSplit) * 100)}% × $${calcs.splitBasis.toLocaleString()} company share`}
+                      />
                     </div>
                   )}
                 </div>
@@ -1241,7 +1361,7 @@ export function CommissionBreakdown() {
     return (
       <div className="border rounded-lg bg-background overflow-hidden border-border/60">
         <CDASectionHeader
-          title="05. Company & Radius"
+          title="06. Company & Radius"
           className="bg-muted/20"
           status={
             <Badge variant="secondary" className="h-4 text-[9px] px-1.5 bg-slate-100 text-slate-600">
@@ -1293,8 +1413,8 @@ export function CommissionBreakdown() {
             <div className="flex items-start justify-between border-b pb-4">
               <div>
                 <div className="flex items-center gap-2 mb-2">
-                  <div className="size-7 rounded-md bg-primary flex items-center justify-center">
-                    <Building2 className="size-4 text-primary-foreground" />
+                  <div className="size-7 rounded-md bg-[#5A5FF2] flex items-center justify-center">
+                    <Building2 className="size-4 text-white" />
                   </div>
                   <span className="font-bold text-sm">Radius Agent</span>
                 </div>
@@ -1437,12 +1557,17 @@ export function CommissionBreakdown() {
       {/* Top Header */}
       <header className="h-14 border-b flex items-center justify-between px-6 shrink-0 bg-background/50 backdrop-blur">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-muted-foreground hover:text-foreground">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="h-8 gap-1.5 text-muted-foreground hover:text-foreground"
+            onClick={() => navigate("/transaction-detail")}
+          >
             <ChevronLeft className="size-4" />
             Back to transaction
           </Button>
           <Separator orientation="vertical" className="h-5" />
-          <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
+          <div className="size-8 rounded-lg bg-[#5A5FF2]/10 flex items-center justify-center text-[#5A5FF2] shrink-0">
             <Building2 className="size-4" />
           </div>
           <div>
@@ -1473,7 +1598,14 @@ export function CommissionBreakdown() {
             </Select>
           </div>
           <Separator orientation="vertical" className="h-6 mx-1" />
-          <div className="flex items-center gap-2">{renderFooterCTA()}</div>
+          <div className="flex items-center gap-2">
+            <Button
+              className="h-8 text-[11px] gap-1.5 bg-[#5A5FF2] hover:bg-[#5A5FF2]/90 text-white font-bold"
+              onClick={handleSendForTLReview}
+            >
+              <Send className="size-3.5" /> Submit for Approval
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -1630,8 +1762,12 @@ export function CommissionBreakdown() {
                     {isEditable && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-7 text-[10px] gap-1.5 px-2 bg-background border shadow-none">
-                            <Plus className="size-3" /> Add
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-7 text-[10px] gap-1.5 px-2 bg-background border-[#5A5FF2] text-[#5A5FF2] hover:bg-[#5A5FF2]/5"
+                          >
+                            <Plus className="size-3" /> Add Shared
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48">
@@ -1642,9 +1778,15 @@ export function CommissionBreakdown() {
                             Add Referral Fee
                           </DropdownMenuItem>
                           {role !== "agent" && (
-                            <DropdownMenuItem onClick={() => setIsDeductionOpen(true)}>
-                              Add Pre-Split Deduction
-                            </DropdownMenuItem>
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => setIsDeductionOpen(true)}>
+                                Add Brokerage Fee
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => setIsDeductionOpen(true)}>
+                                Add Compliance Review
+                              </DropdownMenuItem>
+                            </>
                           )}
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -1689,168 +1831,157 @@ export function CommissionBreakdown() {
                   </div>
                 </div>
 
-                {/* Section 03: Allocation Sides */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between px-1.5">
-                    <h3 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                      03. Allocation Sides
-                    </h3>
+                {/* Section 03: Allocation Sides (Vertical Stack) */}
+                <Card className="border-border/60 shadow-sm gap-0">
+                  <CardHeader className="h-14 px-6 py-0 flex flex-row items-center justify-between border-b border-border/50 bg-background">
+                    <CardTitle className="text-[13px] font-bold text-foreground">03 Allocation Sides</CardTitle>
                     {isEditable && role !== "agent" && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 text-[10px] gap-1 px-1.5 hover:bg-muted/50"
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="h-7 text-[10px] gap-1.5 px-3 bg-background border-[#5A5FF2] text-[#5A5FF2] hover:bg-[#5A5FF2]/5 font-bold"
                         onClick={() => setIsAllocationOpen(true)}
                       >
-                        <Percent className="size-3" /> Change Allocation
+                        Change Allocation
                       </Button>
                     )}
-                  </div>
-
-                  <div className={cn(
-                    "grid gap-3",
-                    data.sides.length > 1 ? "grid-cols-2" : "grid-cols-1"
-                  )}>
-                    {data.sides.map((side) => {
+                  </CardHeader>
+                  <CardContent className="px-6 pt-4 pb-4 space-y-0">
+                    {data.sides.map((side, sideIdx) => {
                       const sideAmount = grossAfterDeductions * (side.percentage / 100);
+                      const hasAgents = side.agents.length > 0;
+
                       if (side.percentage === 0 && side.agents.length === 0 && role === "agent")
                         return null;
-                      return (
-                        <div
-                          key={side.id}
-                          className="border rounded-lg bg-background overflow-hidden border-border/60 flex flex-col"
-                        >
-                          <div
-                            className="flex items-center justify-between px-4 py-2 bg-muted/20 border-b border-border/50"
-                          >
-                            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                              {side.type} Side
-                            </p>
-                            <span className="text-[11px] font-bold tabular-nums">
-                              {side.percentage}%
-                            </span>
-                          </div>
-                          
-                          <SpreadsheetRow
-                            label="Distributable"
-                            value={sideAmount}
-                            className="bg-muted/5 px-4 py-1.5 border-b border-border/40"
-                            labelClassName="text-[10px] text-muted-foreground uppercase font-medium"
-                            valueClassName="text-[11px] font-bold tabular-nums"
-                          />
 
-                          <div className="divide-y divide-border/40 flex-1">
-                            {side.agents.map((agent) => renderAgentRow(agent, sideAmount))}
-                            {side.agents.length === 0 && (
-                              <div className="flex items-center gap-2 px-4 py-2.5">
-                                <Circle className="size-3 text-muted-foreground/30" />
-                                <p className="text-[11px] text-muted-foreground/60 italic">
-                                  No agents assigned
-                                </p>
-                                {isEditable && role !== "agent" && (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-6 text-[10px] px-2 ml-auto"
-                                    onClick={() => setIsAgentOpen(true)}
-                                  >
-                                    <Plus className="size-3 mr-1" /> Assign
-                                  </Button>
-                                )}
+                      return (
+                        <div key={side.id}>
+                          <section>
+                            {/* Side Sub-header */}
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex flex-col">
+                                <span className="text-[12px] font-bold text-foreground capitalize">{side.type} Side</span>
+                                <span className="text-[11px] font-medium text-muted-foreground">
+                                  {side.percentage}% · ${sideAmount.toLocaleString()}
+                                </span>
                               </div>
-                            )}
-                          </div>
-                          
-                          {isEditable && role !== "agent" && side.agents.length > 0 && (
-                            <div className="p-2 border-t border-border/40 bg-muted/5">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="w-full h-7 text-[10px] bg-background shadow-none"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setIsAgentOpen(true);
-                                }}
-                              >
-                                <UserPlus className="size-3 mr-1.5" /> Add Agent
-                              </Button>
+                              {isEditable && role !== "agent" && (
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className="h-7 text-[11px] text-[#5A5FF2] hover:bg-[#5A5FF2]/5 px-2 gap-1.5 font-bold -mr-2"
+                                  onClick={() => handleAddAgent(side.type)}
+                                >
+                                  <Plus className="size-3" /> Add Agent
+                                </Button>
+                              )}
                             </div>
-                          )}
+
+                            {/* Agent List or Empty State */}
+                            <div className="flex flex-col gap-3">
+                              {hasAgents ? (
+                                side.agents.map((agent) => {
+                                  const calcs = calcAgentFinancials(agent, sideAmount);
+                                  const isSelected = selectedNode === `agent-${agent.id}`;
+                                  return (
+                                    <div
+                                      key={agent.id}
+                                      onClick={() => setSelectedNode(`agent-${agent.id}`)}
+                                      className={cn(
+                                        "group flex items-center gap-3 cursor-pointer transition-colors border-l-2 pl-3 -ml-3",
+                                        isSelected ? "border-[#5A5FF2]" : "border-transparent hover:border-border/30"
+                                      )}
+                                    >
+                                      <Avatar className="size-8 border-border/50">
+                                        <AvatarImage src={agent.avatar} />
+                                        <AvatarFallback className="text-[10px] font-bold bg-muted text-muted-foreground">{agent.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
+                                      </Avatar>
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-[12px] font-bold text-foreground">{agent.name}</p>
+                                        <p className="text-[11px] text-muted-foreground font-medium mt-0.5 flex items-center gap-1.5">
+                                          <Badge variant="outline" className="h-[16px] px-1.5 text-[9px] font-semibold bg-blue-50/50 border-blue-200/50 text-blue-700 uppercase tracking-wider">
+                                            {agent.allocationPct}% split
+                                          </Badge>
+                                          <span className="uppercase tracking-widest text-[9px] font-bold">{agent.planName}</span>
+                                        </p>
+                                      </div>
+                                      <div className="flex items-center gap-3">
+                                        <div className="text-right">
+                                          <p className="text-[13px] font-bold tabular-nums text-foreground">
+                                            ${calcs.netAgentCommission.toLocaleString()}
+                                          </p>
+                                          <p className="text-[9px] font-bold text-muted-foreground mt-0.5 uppercase tracking-wider">net payout</p>
+                                        </div>
+                                        <ChevronRight className={cn(
+                                          "size-4 text-muted-foreground/40 transition-colors",
+                                          isSelected && "text-[#5A5FF2]"
+                                        )} />
+                                      </div>
+                                    </div>
+                                  );
+                                })
+                              ) : (
+                                <div className="flex items-center justify-center py-4">
+                                  <span className="text-[12px] font-medium text-muted-foreground/60">No agents assigned</span>
+                                </div>
+                              )}
+                            </div>
+                          </section>
+                          <Separator className="my-4" />
                         </div>
                       );
                     })}
-                  </div>
-                </div>
-
-                {/* Allocation bar */}
-                {allAgentCalcs.length > 0 && (
-                  <div className="space-y-1.5 pt-1">
-                    <div className="flex h-1.5 w-full rounded-full overflow-hidden bg-muted">
-                      {allAgentCalcs.map(({ agent, side }, i) => (
-                        <div
-                          key={agent.id}
-                          className={cn(
-                            "h-full transition-all",
-                            i % 2 === 0 ? "bg-indigo-400" : "bg-slate-400"
-                          )}
-                          style={{
-                            width: `${(agent.allocationPct / 100) * (side.percentage || 0)}%`,
-                          }}
-                        />
-                      ))}
-                    </div>
-                    <div className="flex items-center flex-wrap gap-x-4 gap-y-0.5">
-                      {allAgentCalcs.map(({ agent }, i) => (
-                        <div key={agent.id} className="flex items-center gap-1">
-                          <div
-                            className={cn(
-                              "size-1.5 rounded-full",
-                              i % 2 === 0 ? "bg-indigo-400" : "bg-slate-400"
-                            )}
-                          />
-                          <span className="text-[10px] text-muted-foreground">
-                            {agent.name} ({agent.allocationPct}%)
-                          </span>
+                    
+                    {/* Allocation Bar */}
+                    <div className="pt-3 pb-2">
+                      <div className="w-full">
+                        <div className="h-[6px] w-full bg-muted rounded-full flex overflow-hidden">
+                          {data.sides.map((side, idx) => (
+                            <div
+                              key={side.id}
+                              style={{ width: `${side.percentage}%` }}
+                              className={cn(
+                                "h-full transition-all duration-500",
+                                side.type === "buyer" ? "bg-[#5A5FF2]" : "bg-[#5A5FF2]/30"
+                              )}
+                            />
+                          ))}
                         </div>
-                      ))}
+                        <div className="flex items-center justify-between mt-2">
+                          <div className="flex items-center gap-4">
+                            {data.sides.map((side) => (
+                              <div key={side.id} className="flex items-center gap-1.5">
+                                <div className={cn(
+                                  "size-1.5 rounded-full",
+                                  side.type === "buyer" ? "bg-[#5A5FF2]" : "bg-[#5A5FF2]/30"
+                                )} />
+                                <span className={cn(
+                                  "text-[11px] font-bold uppercase tracking-tight",
+                                  side.percentage === 0 ? "text-muted-foreground/40" : "text-muted-foreground"
+                                )}>
+                                  {side.type}: {side.percentage}%
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  </CardContent>
+                </Card>
 
-                {/* Section 04: Agent Breakdown */}
+                {/* Section 04: Post-Split Deductions */}
+                {renderPostSplitDeductions()}
+
+                {/* Section 05: Agent Breakdown */}
                 {renderAgentBreakdown()}
 
-                {/* Section 05: Company / Radius Breakdown */}
+                {/* Section 06: Company / Radius Breakdown */}
                 {renderCompanyBreakdown()}
               </>
             )}
 
-            {/* Activity Log */}
-            <div className="border rounded-lg bg-background overflow-hidden shadow-sm border-border/60">
-              <button
-                onClick={() => setShowAuditLog(!showAuditLog)}
-                className="w-full flex items-center justify-between px-4 py-2.5 bg-muted/20 hover:bg-muted/30 transition-colors"
-                aria-expanded={showAuditLog}
-              >
-                <div className="flex items-center gap-2">
-                  <FileText className="size-3.5 text-muted-foreground" />
-                  <span className="text-[12px] font-medium">Activity Log</span>
-                  <span className="text-[10px] text-muted-foreground">
-                    {auditEvents.length} events
-                  </span>
-                </div>
-                {showAuditLog ? (
-                  <ChevronUp className="size-4 text-muted-foreground" />
-                ) : (
-                  <ChevronDown className="size-4 text-muted-foreground" />
-                )}
-              </button>
-              {showAuditLog && (
-                <div className="px-5 py-3 border-t bg-muted/5">
-                  <AuditTimeline events={auditEvents} />
-                </div>
-              )}
-            </div>
+            {/* Removed inline Activity Log to use Sheet instead */}
           </div>
         </div>
 
@@ -1861,11 +1992,13 @@ export function CommissionBreakdown() {
               {/* Notes (compact) */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <div>
+                  <div className="flex items-center gap-2">
                     <p className="text-[12px] font-semibold">Notes</p>
-                    <p className="text-[10px] text-muted-foreground">
-                      {notes.filter((n) => !n.resolved).length} unresolved
-                    </p>
+                    {notes.filter(n => !n.resolved).length > 0 && (
+                      <span className="flex items-center justify-center size-4 bg-red-500 text-white rounded-full text-[9px] font-bold">
+                        {notes.filter(n => !n.resolved).length}
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-1.5">
                     <Button
@@ -1897,6 +2030,40 @@ export function CommissionBreakdown() {
                   ))}
                   {notes.length === 0 && (
                     <p className="text-[11px] text-muted-foreground/50 italic">No notes yet.</p>
+                  )}
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Activity Log (compact) */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-[12px] font-semibold">Activity</p>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-6 text-[10px] px-2"
+                      onClick={() => setShowAuditLog(true)}
+                    >
+                      View all
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  {auditEvents.slice(-2).map((event) => (
+                    <div key={event.id} className="flex items-start gap-2">
+                      <div className="size-1.5 rounded-full bg-muted-foreground/30 mt-1.5 shrink-0" />
+                      <p className="text-[11px] text-muted-foreground line-clamp-2 leading-tight">
+                        <span className="font-medium text-foreground">{event.actor}</span> {event.event}
+                      </p>
+                    </div>
+                  ))}
+                  {auditEvents.length === 0 && (
+                    <p className="text-[11px] text-muted-foreground/50 italic">No activity yet.</p>
                   )}
                 </div>
               </div>
@@ -2077,7 +2244,7 @@ export function CommissionBreakdown() {
                     return (
                       <>
                         <div className="flex items-center gap-3">
-                          <Avatar className="size-10 border-2 border-primary/10">
+                          <Avatar className="size-10 border-2 border-[#5A5FF2]/10">
                             <AvatarImage src={agent.avatar} />
                             <AvatarFallback>{agent.name.charAt(0)}</AvatarFallback>
                           </Avatar>
@@ -2102,17 +2269,21 @@ export function CommissionBreakdown() {
                           </h4>
                           <div className="divide-y divide-border/50 border rounded-lg bg-muted/5 overflow-hidden text-[12px]">
                             <div className="flex justify-between p-2.5">
-                              <span className="text-muted-foreground">Allocation basis</span>
+                              <span className="text-muted-foreground">Allocation Basis</span>
                               <span className="font-medium">${calcs.agentBasis.toLocaleString()}</span>
                             </div>
-                            {calcs.preSplitTotal > 0 && (
+                            {calcs.agentPreSplitTotal > 0 && (
                               <div className="flex justify-between p-2.5">
-                                <span className="text-muted-foreground">Pre-split deductions</span>
-                                <span className="font-medium">
-                                  −${calcs.preSplitTotal.toLocaleString()}
+                                <span className="text-muted-foreground">Internal Adjustments</span>
+                                <span className="font-medium text-amber-600">
+                                  −${calcs.agentPreSplitTotal.toLocaleString()}
                                 </span>
                               </div>
                             )}
+                            <div className="flex justify-between p-2.5 bg-muted/[0.03]">
+                              <span className="text-muted-foreground font-medium">Split Basis</span>
+                              <span className="font-bold">${calcs.splitBasis.toLocaleString()}</span>
+                            </div>
                             <div className="flex justify-between p-2.5">
                               <span className="text-muted-foreground">
                                 Split ({Math.round(agent.planSplit * 100)}%)
@@ -2124,12 +2295,12 @@ export function CommissionBreakdown() {
                             {calcs.postSplitTotal > 0 && (
                               <div className="flex justify-between p-2.5">
                                 <span className="text-muted-foreground">Post-split deductions</span>
-                                <span className="font-medium">
+                                <span className="font-medium text-red-600">
                                   −${calcs.postSplitTotal.toLocaleString()}
                                 </span>
                               </div>
                             )}
-                            <div className="flex justify-between p-2.5 bg-muted/20 font-semibold">
+                            <div className="flex justify-between p-2.5 bg-[#5A5FF2]/5 font-bold text-[#5A5FF2]">
                               <span>Net commission</span>
                               <span>${calcs.netAgentCommission.toLocaleString()}</span>
                             </div>
@@ -2138,15 +2309,16 @@ export function CommissionBreakdown() {
 
                         {isEditable && (
                           <div className="space-y-1.5">
+                            {role !== "agent" && (
+                              <Button
+                                className="w-full h-8 text-[11px] border-[#5A5FF2] text-[#5A5FF2] hover:bg-[#5A5FF2]/5"
+                                variant="outline"
+                              >
+                                Change Plan
+                              </Button>
+                            )}
                             <Button
-                              className="w-full h-8 text-[11px]"
-                              disabled={role === "agent"}
-                              variant="secondary"
-                            >
-                              Change Plan
-                            </Button>
-                            <Button
-                              className="w-full h-8 text-[11px]"
+                              className="w-full h-8 text-[11px] border-[#5A5FF2] text-[#5A5FF2] hover:bg-[#5A5FF2]/5"
                               variant="outline"
                               onClick={() => setIsDeductionOpen(true)}
                             >
@@ -2259,11 +2431,16 @@ export function CommissionBreakdown() {
           <StatusBadge status={status} />
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" className="h-8 text-[11px] text-muted-foreground" onClick={() => setShowNotes(true)}>
+          <Button variant="ghost" size="sm" className="h-8 text-[11px] text-muted-foreground relative px-3" onClick={() => setShowNotes(true)}>
             <MessageSquare className="size-3.5 mr-2" />
-            Notes ({notes.length})
+            Notes
+            {notes.filter(n => !n.resolved).length > 0 && (
+              <span className="absolute top-1 right-1 size-3 bg-red-500 text-white rounded-full flex items-center justify-center text-[8px] font-bold">
+                {notes.filter(n => !n.resolved).length}
+              </span>
+            )}
           </Button>
-          <Button variant="ghost" size="sm" className="h-8 text-[11px] text-muted-foreground" onClick={() => setShowAuditLog(!showAuditLog)}>
+          <Button variant="ghost" size="sm" className="h-8 text-[11px] text-muted-foreground px-3" onClick={() => setShowAuditLog(true)}>
             <FileText className="size-3.5 mr-2" />
             Activity
           </Button>
@@ -2373,6 +2550,25 @@ export function CommissionBreakdown() {
         </DialogContent>
       </Dialog>
 
+      {/* Activity Sheet */}
+      <Sheet open={showAuditLog} onOpenChange={setShowAuditLog}>
+        <SheetContent className="w-[400px] sm:w-[480px] flex flex-col p-0">
+          <SheetHeader className="px-6 py-4 border-b">
+            <SheetTitle className="text-[14px] font-semibold flex items-center gap-2">
+              <FileText className="size-4" /> Activity Log
+            </SheetTitle>
+            <p className="text-[11px] text-muted-foreground">
+              History of all changes to this CDA.
+            </p>
+          </SheetHeader>
+          <ScrollArea className="flex-1">
+            <div className="px-6 py-4">
+              <AuditTimeline events={auditEvents} />
+            </div>
+          </ScrollArea>
+        </SheetContent>
+      </Sheet>
+
       {/* Add Deduction Dialog */}
       <Dialog open={isDeductionOpen} onOpenChange={setIsDeductionOpen}>
         <DialogContent className="sm:max-w-[425px]">
@@ -2416,10 +2612,10 @@ export function CommissionBreakdown() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDeductionOpen(false)}>
+            <Button variant="outline" onClick={() => setIsDeductionOpen(false)} className="border-[#5A5FF2]/20 text-[#5A5FF2] hover:bg-[#5A5FF2]/5">
               Cancel
             </Button>
-            <Button onClick={() => setIsDeductionOpen(false)}>Add Deduction</Button>
+            <Button onClick={() => setIsDeductionOpen(false)} className="bg-[#5A5FF2] hover:bg-[#5A5FF2]/90 text-white font-bold">Add Deduction</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -2463,10 +2659,10 @@ export function CommissionBreakdown() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAgentOpen(false)}>
+            <Button variant="outline" onClick={() => setIsAgentOpen(false)} className="border-[#5A5FF2]/20 text-[#5A5FF2] hover:bg-[#5A5FF2]/5">
               Cancel
             </Button>
-            <Button onClick={() => setIsAgentOpen(false)}>Assign Agent</Button>
+            <Button onClick={() => setIsAgentOpen(false)} className="bg-[#5A5FF2] hover:bg-[#5A5FF2]/90 text-white font-bold shadow-sm px-6">Assign Agent</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

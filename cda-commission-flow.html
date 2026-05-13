@@ -223,7 +223,7 @@
     role="dialog"
     aria-modal="true"
     class="bg-background rounded-[12px] shadow-2xl flex flex-col overflow-hidden"
-    style="width: 560px; max-width: calc(100vw - 48px); height: 82vh; max-height: 82vh;"
+    style="width: 560px; max-width: calc(100vw - 48px); max-height: 85vh;"
   >
     <!-- Header -->
     <div class="border-b flex-shrink-0 flex items-start justify-between gap-4" style="padding: 20px 24px 16px;">
@@ -236,7 +236,7 @@
       </button>
     </div>
     <!-- Body -->
-    <div id="plan-modal-body" class="overflow-y-auto flex flex-col" style="padding: 16px 24px; gap: 14px; flex: 1 1 0; min-height: 0;">
+    <div id="plan-modal-body" class="overflow-y-auto flex flex-col" style="padding: 16px 24px 7px; gap: 14px; flex: 1 1 0; min-height: 0;">
 
       <!-- Plan Name -->
       <div class="flex flex-col" style="gap:6px;">
@@ -250,14 +250,11 @@
       <!-- Plan Type -->
       <div class="flex flex-col" style="gap:6px;">
         <label class="text-sm font-medium">Plan Type</label>
-        <div class="grid grid-cols-2 rounded-md bg-muted p-[3px]" style="height:40px;gap:3px;">
-          <button data-group="plan-type" data-active="true" data-value="standard"
-            class="tab-btn rounded-[5px] text-sm font-medium"
-            onclick="setPlanType('standard',this)">Standard</button>
-          <button data-group="plan-type" data-active="false" data-value="tiered"
-            class="tab-btn rounded-[5px] text-sm font-medium"
-            onclick="setPlanType('tiered',this)">Tiered</button>
-        </div>
+        <select class="w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring" 
+          style="height:40px;" onchange="setPlanType(this.value, this)">
+          <option value="standard">Standard</option>
+          <option value="tiered">Tiered</option>
+        </select>
       </div>
 
       <!-- Standard fields -->
@@ -305,14 +302,11 @@
       <!-- Fee Type -->
       <div class="flex flex-col" style="gap:6px;">
         <label class="text-sm font-medium">Fee Type</label>
-        <div class="grid grid-cols-2 rounded-md bg-muted p-[3px]" style="height:40px;gap:3px;">
-          <button data-group="plan-fee-type" data-active="true"
-            class="tab-btn rounded-[5px] text-sm font-medium"
-            onclick="setPlanFeeType('flat',this)">Flat</button>
-          <button data-group="plan-fee-type" data-active="false"
-            class="tab-btn rounded-[5px] text-sm font-medium"
-            onclick="setPlanFeeType('percentage',this)">Percentage</button>
-        </div>
+        <select class="w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring" 
+          style="height:40px;" onchange="setPlanFeeType(this.value, this)">
+          <option value="flat">Flat</option>
+          <option value="percentage">Percentage</option>
+        </select>
       </div>
 
       <!-- Fee + Cap row -->
@@ -351,28 +345,29 @@
         </button>
       </div>
 
-      <!-- Deal Types -->
+      <!-- Deal Types (Dropdown Multi-select) -->
       <div class="flex flex-col" style="gap:6px;">
         <label class="text-sm font-medium">Deal Types</label>
-        <div class="grid grid-cols-2" style="gap:10px;">
-          <label class="flex items-center gap-2 text-sm cursor-pointer">
-            <input type="checkbox" id="dt-buyer" checked class="rounded border-input" style="width:16px;height:16px;" />
-            Buyer Side
-          </label>
-          <label class="flex items-center gap-2 text-sm cursor-pointer">
-            <input type="checkbox" id="dt-seller" checked class="rounded border-input" style="width:16px;height:16px;" />
-            Listing Side
-          </label>
-          <label class="flex items-center gap-2 text-sm cursor-pointer">
-            <input type="checkbox" id="dt-lease" class="rounded border-input" style="width:16px;height:16px;" />
-            Lease
-          </label>
-          <label class="flex items-center gap-2 text-sm cursor-pointer">
-            <input type="checkbox" id="dt-landlord" class="rounded border-input" style="width:16px;height:16px;" />
-            Landlord
-          </label>
+        <div class="relative">
+          <button type="button" onclick="toggleDealTypeDropdown()" class="w-full flex items-center justify-between rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring" style="height:40px;">
+            <span id="dt-summary">Buyer Side +1 more</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <div id="dt-dropdown" class="dropdown-menu absolute left-0 right-0 top-11 bg-background border rounded-md shadow-lg p-2 z-[60]">
+            <label class="flex items-center gap-2 p-2 text-sm hover:bg-muted rounded cursor-pointer">
+              <input type="checkbox" checked onchange="updateDT()" class="dt-check"> Buyer Side
+            </label>
+            <label class="flex items-center gap-2 p-2 text-sm hover:bg-muted rounded cursor-pointer">
+              <input type="checkbox" checked onchange="updateDT()" class="dt-check"> Listing Side
+            </label>
+            <label class="flex items-center gap-2 p-2 text-sm hover:bg-muted rounded cursor-pointer">
+              <input type="checkbox" onchange="updateDT()" class="dt-check"> Lease
+            </label>
+            <label class="flex items-center gap-2 p-2 text-sm hover:bg-muted rounded cursor-pointer">
+              <input type="checkbox" onchange="updateDT()" class="dt-check"> Landlord
+            </label>
+          </div>
         </div>
-        <p id="err-deal-types" class="text-xs text-destructive hidden"></p>
       </div>
 
       <!-- Divider -->
@@ -431,7 +426,7 @@
     </div>
     <!-- Footer -->
     <div class="border-t bg-background flex-shrink-0 flex items-center justify-end"
-      style="padding:12px 24px;gap:8px;box-shadow:0 -1px 0 hsl(var(--border)),0 -4px 8px rgba(0,0,0,0.04);">
+      style="padding:7px 24px 12px;gap:8px;box-shadow:0 -1px 0 hsl(var(--border)),0 -4px 8px rgba(0,0,0,0.04);">
       <button onclick="closePlanModal()" class="rounded-md border border-input bg-background px-4 text-sm font-medium hover:bg-muted transition-colors focus:outline-none focus:ring-2 focus:ring-ring" style="height:36px;">Cancel</button>
       <button id="save-plan-btn" onclick="handleSavePlan()" class="rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-ring" style="height:36px;">Save Plan</button>
     </div>
@@ -447,7 +442,7 @@
     role="dialog"
     aria-modal="true"
     class="bg-background rounded-lg shadow-2xl flex flex-col overflow-hidden"
-    style="width:600px;max-width:calc(100vw - 48px);height:82vh;max-height:82vh;"
+    style="width:560px;max-width:calc(100vw - 48px);max-height:90vh;"
   >
     <!-- Header -->
     <div class="border-b flex-shrink-0" style="padding:20px 24px 16px;">
@@ -455,90 +450,85 @@
       <p class="text-xs text-muted-foreground leading-snug" style="margin-top:2px;">Configure fee details and agent assignment.</p>
     </div>
     <!-- Body -->
-    <div id="fee-modal-body" class="overflow-y-auto flex flex-col" style="padding:16px 24px;gap:12px;flex:1 1 0;min-height:0;">
+    <div id="fee-modal-body" class="overflow-y-auto flex flex-col" style="padding:16px 24px 7px;gap:14px;flex:0 1 auto;min-height:0;">
 
-      <!-- Fee Setup card -->
-      <div class="border rounded-lg" style="padding:16px;">
-        <p class="text-sm font-medium text-foreground leading-none" style="margin-bottom:4px;">Fee Setup</p>
-        <div class="flex flex-col" style="gap:14px;">
+      <!-- Fee Name -->
+      <div class="flex flex-col" style="gap:6px;">
+        <label for="fee-name" class="text-sm font-medium">Fee Name</label>
+        <input id="fee-name" type="text" placeholder="e.g., Transaction Coordinator Fee"
+          class="w-full rounded-md border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          style="height:40px;" />
+      </div>
 
-          <!-- Fee Name -->
-          <div class="flex flex-col" style="gap:6px;">
-            <label for="fee-name" class="text-sm font-medium">Fee Name</label>
-            <input id="fee-name" type="text" placeholder="e.g., Transaction Coordinator Fee"
-              class="w-full rounded-md border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              style="height:40px;" />
-          </div>
+      <!-- Fee Type -->
+      <div class="flex flex-col" style="gap:6px;">
+        <label class="text-sm font-medium">Fee Type</label>
+        <select class="w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring" 
+          style="height:40px;" onchange="setFeeType(this.value, this)">
+          <option value="flat">Flat</option>
+          <option value="percentage">Percentage</option>
+        </select>
+      </div>
 
-          <!-- Fee Type tabs -->
-          <div class="flex flex-col" style="gap:6px;">
-            <label class="text-sm font-medium">Fee Type</label>
-            <div class="grid grid-cols-2 rounded-md bg-muted p-[3px]" style="height:40px;gap:3px;">
-              <button data-group="fee-type" data-active="true" class="tab-btn rounded-[5px] text-sm font-medium" onclick="setFeeType('flat',this)">Flat</button>
-              <button data-group="fee-type" data-active="false" class="tab-btn rounded-[5px] text-sm font-medium" onclick="setFeeType('percentage',this)">Percentage</button>
-            </div>
-          </div>
-
-          <!-- Fee Amount -->
-          <div class="flex flex-col" style="gap:6px;">
-            <label id="fee-amount-label" for="fee-amount" class="text-sm font-medium">Flat Fee</label>
-            <div class="relative">
-              <span id="fee-prefix" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground select-none">$</span>
-              <input id="fee-amount" type="text" inputmode="decimal" placeholder="495"
-                class="w-full rounded-md border border-input bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring pl-7"
-                style="height:40px;padding-right:12px;" />
-              <span id="fee-suffix" class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground select-none hidden">%</span>
-            </div>
-          </div>
-
-          <!-- When Applied -->
-          <div class="flex flex-col" style="gap:6px;">
-            <label class="text-sm font-medium">When Applied</label>
-            <div class="grid grid-cols-2 rounded-md bg-muted p-[3px]" style="height:40px;gap:3px;">
-              <button data-group="timing" data-active="true" class="tab-btn rounded-[5px] text-sm font-medium" onclick="setTabGroup('timing',this)">Pre-Split</button>
-              <button data-group="timing" data-active="false" class="tab-btn rounded-[5px] text-sm font-medium" onclick="setTabGroup('timing',this)">Post-Split</button>
-            </div>
-          </div>
-
-          <!-- Applies To -->
-          <div class="flex flex-col" style="gap:6px;">
-            <label class="text-sm font-medium">Applies To</label>
-            <div class="grid grid-cols-2 rounded-md bg-muted p-[3px]" style="height:40px;gap:3px;">
-              <button data-group="applies-to" data-active="true" class="tab-btn rounded-[5px] text-sm font-medium" onclick="setAppliesTo('team',this)">Team</button>
-              <button data-group="applies-to" data-active="false" class="tab-btn rounded-[5px] text-sm font-medium" onclick="setAppliesTo('agents',this)">Agents</button>
-            </div>
-            <p id="applies-hint" class="text-xs text-muted-foreground">Applies to all team members.</p>
-          </div>
-
-          <!-- Sliding Scale -->
-          <div class="flex items-center justify-between rounded-md border" style="padding:12px 14px;">
-            <div>
-              <p class="text-sm font-medium leading-none">Sliding Scale</p>
-              <p class="text-xs text-muted-foreground" style="margin-top:3px;">Enable tiered fee values.</p>
-            </div>
-            <button id="sw-sliding" role="switch" aria-checked="false"
-              onclick="toggleFeeSwitch('sw-sliding','sliding-scale-card')"
-              class="sw-track relative inline-flex items-center flex-shrink-0 rounded-full cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-              style="width:44px;height:24px;background:hsl(var(--input));">
-              <span class="sw-thumb block rounded-full bg-white shadow-sm" style="width:18px;height:18px;transform:translateX(3px);"></span>
-            </button>
-          </div>
-
-          <!-- Cap -->
-          <div class="flex items-center justify-between rounded-md border" style="padding:12px 14px;">
-            <div>
-              <p class="text-sm font-medium leading-none">Contributes to Cap</p>
-              <p class="text-xs text-muted-foreground" style="margin-top:3px;">Count toward cap calculations.</p>
-            </div>
-            <button id="sw-cap" role="switch" aria-checked="false"
-              onclick="toggleFeeSwitch('sw-cap',null)"
-              class="sw-track relative inline-flex items-center flex-shrink-0 rounded-full cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-              style="width:44px;height:24px;background:hsl(var(--input));">
-              <span class="sw-thumb block rounded-full bg-white shadow-sm" style="width:18px;height:18px;transform:translateX(3px);"></span>
-            </button>
-          </div>
-
+      <!-- Fee Amount -->
+      <div class="flex flex-col" style="gap:6px;">
+        <label id="fee-amount-label" for="fee-amount" class="text-sm font-medium">Flat Fee</label>
+        <div class="relative">
+          <span id="fee-prefix" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground select-none">$</span>
+          <input id="fee-amount" type="text" inputmode="decimal" placeholder="495"
+            class="w-full rounded-md border border-input bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring pl-7"
+            style="height:40px;padding-right:12px;" />
+          <span id="fee-suffix" class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground select-none hidden">%</span>
         </div>
+      </div>
+
+      <!-- When Applied -->
+      <div class="flex flex-col" style="gap:6px;">
+        <label class="text-sm font-medium">When Applied</label>
+        <select class="w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring" 
+          style="height:40px;" onchange="setTiming(this.value, this)">
+          <option value="pre-split">Pre-Split</option>
+          <option value="post-split">Post-Split</option>
+        </select>
+      </div>
+
+      <!-- Applies To -->
+      <div class="flex flex-col" style="gap:6px;">
+        <label class="text-sm font-medium">Applies To</label>
+        <select class="w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring" 
+          style="height:40px;" onchange="setAppliesTo(this.value, this)">
+          <option value="team">Team</option>
+          <option value="agents">Agents</option>
+        </select>
+        <p id="applies-hint" class="text-xs text-muted-foreground">Applies to all team members.</p>
+      </div>
+
+      <!-- Sliding Scale -->
+      <div class="flex items-center justify-between rounded-md border" style="padding:12px 14px;">
+        <div>
+          <p class="text-sm font-medium leading-none">Sliding Scale</p>
+          <p class="text-xs text-muted-foreground" style="margin-top:3px;">Enable tiered fee values.</p>
+        </div>
+        <button id="sw-sliding" role="switch" aria-checked="false"
+          onclick="toggleFeeSwitch('sw-sliding','sliding-scale-card')"
+          class="sw-track relative inline-flex items-center flex-shrink-0 rounded-full cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+          style="width:44px;height:24px;background:hsl(var(--input));">
+          <span class="sw-thumb block rounded-full bg-white shadow-sm" style="width:18px;height:18px;transform:translateX(3px);"></span>
+        </button>
+      </div>
+
+      <!-- Cap -->
+      <div class="flex items-center justify-between rounded-md border" style="padding:12px 14px;">
+        <div>
+          <p class="text-sm font-medium leading-none">Contributes to Cap</p>
+          <p class="text-xs text-muted-foreground" style="margin-top:3px;">Count toward cap calculations.</p>
+        </div>
+        <button id="sw-cap" role="switch" aria-checked="false"
+          onclick="toggleFeeSwitch('sw-cap',null)"
+          class="sw-track relative inline-flex items-center flex-shrink-0 rounded-full cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+          style="width:44px;height:24px;background:hsl(var(--input));">
+          <span class="sw-thumb block rounded-full bg-white shadow-sm" style="width:18px;height:18px;transform:translateX(3px);"></span>
+        </button>
       </div>
 
       <!-- Sliding Scale Tiers card -->
@@ -573,7 +563,7 @@
     </div>
     <!-- Footer -->
     <div class="border-t bg-background flex-shrink-0 flex items-center justify-end"
-      style="padding:12px 24px;gap:8px;box-shadow:0 -1px 0 hsl(var(--border)),0 -4px 8px rgba(0,0,0,0.04);">
+      style="padding:7px 24px 12px;gap:8px;box-shadow:0 -1px 0 hsl(var(--border)),0 -4px 8px rgba(0,0,0,0.04);">
       <button onclick="closeFeeModal()" class="rounded-md border border-input bg-background px-4 text-sm font-medium hover:bg-muted transition-colors focus:outline-none focus:ring-2 focus:ring-ring" style="height:36px;">Cancel</button>
       <button id="save-fee-btn" onclick="handleSaveFee()" class="rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-ring" style="height:36px;">Save Fee Type</button>
     </div>
@@ -648,79 +638,52 @@ function showToast(msg) {
 function renderAll() {
   renderPlansSection();
   renderFeesSection();
-  renderDefaultsSection();
+  renderAgentsTable();
 }
 
 function renderPlansSection() {
   const section = document.getElementById('plans-section');
   if (state.plans.length === 0) {
-    section.innerHTML = renderEmptySection(
-      'COMMISSION PLANS',
-      'Create default split structures for agents and teams.',
-      'Create plans like 80/20 Standard or tiered plans for agents.',
-      'dollar',
-      'Add Plan',
-      'openPlanModal()'
-    );
+    section.innerHTML = renderEmptySection('COMMISSION PLANS','Default split structures.','Create plans like 80/20 Standard.','dollar','Add Plan','openPlanModal()');
   } else {
-    let rows = state.plans.map(plan => `
-      <div class="plan-row flex min-h-[66px] items-center justify-between border-b px-6 py-4 last:border-b-0 transition-colors bg-card/50 hover:bg-muted/30">
-        <div class="flex flex-col gap-1.5">
-          <div class="flex items-center gap-2.5">
-            <p class="text-sm font-semibold tracking-tight">${plan.name}</p>
-            ${plan.type === 'tiered'
-              ? `<span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider border border-[#fee685] bg-[#fffbeb] text-[#bb4d00]">Tiered</span>`
-              : `<span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-secondary text-muted-foreground">Standard</span>`}
+    const rows = state.plans.map(p => `
+      <tr class="group hover:bg-muted/30 transition-colors">
+        <td class="px-4 py-3 font-medium text-sm text-foreground">${p.name}</td>
+        <td class="px-4 py-3">
+          <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${p.type==='tiered'?'border border-[#fee685] bg-[#fffbeb] text-[#bb4d00]':'bg-secondary text-muted-foreground'}">${p.type}</span>
+        </td>
+        <td class="px-4 py-3">
+          <div class="flex -space-x-2">
+            <div class="size-7 rounded-full border-2 border-background bg-muted flex items-center justify-center text-[10px] font-bold">JD</div>
+            <div class="size-7 rounded-full border-2 border-background bg-muted flex items-center justify-center text-[10px] font-bold">SK</div>
+            <div class="size-7 rounded-full border-2 border-background bg-muted flex items-center justify-center text-[10px] font-bold">+2</div>
           </div>
-          <div class="flex flex-wrap items-center gap-x-5 gap-y-1 text-[11px] text-muted-foreground/80 font-medium">
-            <div class="flex items-center gap-1.5">
-              <span class="text-[10px] uppercase tracking-widest text-muted-foreground/50">Split</span>
-              <span>${plan.type === 'standard' ? `Agent ${plan.agentSplit}% / Team ${plan.teamSplit}%` : `Tiers (${plan.tiers.length})`}</span>
-            </div>
-            <div class="flex items-center gap-1.5">
-              <span class="text-[10px] uppercase tracking-widest text-muted-foreground/50">Fee</span>
-              <span>${plan.feeType === 'percentage' ? plan.feeAmount + '%' : '$' + plan.feeAmount}</span>
-            </div>
-            <div class="flex items-center gap-1.5">
-              <span class="text-[10px] uppercase tracking-widest text-muted-foreground/50">Cap</span>
-              <span>$${Number(plan.capAmount).toLocaleString()}</span>
-            </div>
-            <div class="flex items-center gap-1.5">
-               ${plan.dealTypes.map(dt => `<span class="text-[10px] text-primary/70 font-semibold">${dt}</span>`).join('<span class="text-muted-foreground/30">·</span>')}
-            </div>
-          </div>
-        </div>
-        <div class="relative">
-          <button onclick="togglePlanMenu('${plan.id}')" class="size-8 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted transition-colors">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+        </td>
+        <td class="px-4 py-3 text-right">
+          <button onclick="togglePlanMenu('${p.id}')" class="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
           </button>
-          <div id="plan-menu-${plan.id}" class="dropdown-menu right-0 top-9 w-44 bg-background border rounded-lg shadow-lg overflow-hidden" style="min-width:160px;">
-            <button onclick="editPlan('${plan.id}')" class="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors text-left">
-              ${svgEdit(14)} Edit
-            </button>
-            <button onclick="duplicatePlan('${plan.id}')" class="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors text-left">
-              ${svgCopy(14)} Duplicate
-            </button>
-            <div class="border-t my-1"></div>
-            <button onclick="deletePlan('${plan.id}')" class="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors text-left text-destructive">
-              ${svgTrash(14)} Delete
-            </button>
-          </div>
-        </div>
-      </div>
+        </td>
+      </tr>
     `).join('');
     section.innerHTML = `
-      <div class="flex items-end justify-between px-1">
-        <div>
-          <h2 class="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Commission Plans</h2>
-          <p class="mt-1 text-xs text-muted-foreground">Default split structures.</p>
-        </div>
-        <button onclick="openPlanModal()" class="flex items-center gap-1.5 rounded-md border border-primary px-3 text-sm font-medium text-primary hover:bg-primary/5 transition-colors" style="height:32px;">
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Add Plan
-        </button>
+      <div class="flex items-center justify-between mb-2">
+        <h2 class="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Commission Plans</h2>
+        <button onclick="openPlanModal()" class="text-xs font-semibold text-primary hover:underline">+ Add Plan</button>
       </div>
-      <div class="rounded-xl border bg-card shadow-sm overflow-hidden divide-y">${rows}</div>
+      <div class="rounded-xl border bg-card overflow-hidden">
+        <table class="w-full text-left border-collapse">
+          <thead class="bg-muted/30 border-b">
+            <tr>
+              <th class="px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Plan Name</th>
+              <th class="px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Type</th>
+              <th class="px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Agents</th>
+              <th class="px-4 py-2.5"></th>
+            </tr>
+          </thead>
+          <tbody class="divide-y">${rows}</tbody>
+        </table>
+      </div>
     `;
   }
 }
@@ -728,74 +691,98 @@ function renderPlansSection() {
 function renderFeesSection() {
   const section = document.getElementById('fees-section');
   if (state.fees.length === 0) {
-    section.innerHTML = renderEmptySection(
-      'FEE TYPES',
-      'Define reusable deductions for CDA calculations.',
-      'Create reusable deductions such as TC Fee, RM Fee, E&O Fee, or Compliance Review.',
-      'receipt',
-      'Add Fee',
-      'openFeeModal()'
-    );
+    section.innerHTML = renderEmptySection('FEE TYPES','CDA deductions.','Define reusable deductions.','receipt','Add Fee','openFeeModal()');
   } else {
-    let rows = state.fees.map(fee => `
-      <div class="plan-row flex min-h-[66px] items-center justify-between border-b px-6 py-4 last:border-b-0 transition-colors bg-card/50 hover:bg-muted/30">
-        <div class="flex flex-col gap-1.5">
-          <div class="flex items-center gap-2.5">
-            <p class="text-sm font-semibold tracking-tight">${fee.name}</p>
-            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-secondary text-muted-foreground">${fee.type === 'flat' ? 'Flat' : 'Percentage'}</span>
-          </div>
-          <div class="flex flex-wrap items-center gap-x-5 gap-y-1 text-[11px] text-muted-foreground/80 font-medium">
-            <div class="flex items-center gap-1.5">
-              <span class="text-[10px] uppercase tracking-widest text-muted-foreground/50">Amount</span>
-              <span>${fee.type === 'flat' ? '$' + fee.amount : fee.amount + '%'}</span>
-            </div>
-            <div class="flex items-center gap-1.5">
-              <span class="text-[10px] uppercase tracking-widest text-muted-foreground/50">Timing</span>
-              <span class="capitalize">${fee.timing}</span>
-            </div>
-            <div class="flex items-center gap-1.5">
-              <span class="text-[10px] uppercase tracking-widest text-muted-foreground/50">Applies To</span>
-              <span>${fee.appliesToMode === 'team' ? 'Team' : fee.agentIds.length + ' agents'}</span>
-            </div>
-          </div>
-        </div>
-        <div class="relative">
-          <button onclick="toggleFeeMenu('${fee.id}')" class="size-8 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted transition-colors">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+    const rows = state.fees.map(f => `
+      <tr class="group hover:bg-muted/30 transition-colors">
+        <td class="px-4 py-3 font-medium text-sm text-foreground">${f.name}</td>
+        <td class="px-4 py-3 text-[13px] text-muted-foreground">${f.type === 'flat' ? '$' + f.amount : f.amount + '%'}</td>
+        <td class="px-4 py-3 text-[13px] text-muted-foreground capitalize">${f.timing.replace('-',' ')}</td>
+        <td class="px-4 py-3 text-[13px] text-muted-foreground">${f.appliesToMode === 'team' ? 'Team' : f.agentIds.length + ' agents'}</td>
+        <td class="px-4 py-3 text-right">
+          <button onclick="toggleFeeMenu('${f.id}')" class="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
           </button>
-          <div id="fee-menu-${fee.id}" class="dropdown-menu right-0 top-9 w-40 bg-background border rounded-lg shadow-lg overflow-hidden">
-            <button onclick="editFee('${fee.id}')" class="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left">${svgEdit(14)} Edit</button>
-            <button onclick="duplicateFee('${fee.id}')" class="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left">${svgCopy(14)} Duplicate</button>
-          </div>
-        </div>
-      </div>
+        </td>
+      </tr>
     `).join('');
     section.innerHTML = `
-      <div class="flex items-end justify-between px-1">
-        <div>
-          <h2 class="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Fee Types</h2>
-          <p class="mt-1 text-xs text-muted-foreground">CDA deductions.</p>
-        </div>
-        <button onclick="openFeeModal()" class="flex items-center gap-1.5 rounded-md border border-primary px-3 text-sm font-medium text-primary hover:bg-primary/5 transition-colors" style="height:32px;">
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Add Fee
-        </button>
+      <div class="flex items-center justify-between mb-2">
+        <h2 class="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Fee Types</h2>
+        <button onclick="openFeeModal()" class="text-xs font-semibold text-primary hover:underline">+ Add Fee</button>
       </div>
-      <div class="rounded-xl border bg-card shadow-sm overflow-hidden divide-y">${rows}</div>
+      <div class="rounded-xl border bg-card overflow-hidden">
+        <table class="w-full text-left border-collapse">
+          <thead class="bg-muted/30 border-b">
+            <tr>
+              <th class="px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Fee Name</th>
+              <th class="px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Amount</th>
+              <th class="px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Timing</th>
+              <th class="px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Applies To</th>
+              <th class="px-4 py-2.5"></th>
+            </tr>
+          </thead>
+          <tbody class="divide-y">${rows}</tbody>
+        </table>
+      </div>
     `;
   }
 }
 
-function renderDefaultsSection() {
+function renderAgentsTable() {
   const section = document.getElementById('defaults-section');
-  section.innerHTML = renderEmptySection(
-      'DEFAULT ASSIGNMENTS',
-      'Connect plans and fees to agents.',
-      'Assign commission plans and fee types to agents so CDA estimates are created automatically.',
-      'user-check',
-      'Add Defaults',
-      'openPlanModal()'
-    );
+  const rows = AGENTS.map(agent => `
+    <tr class="agent-row group hover:bg-muted/30 transition-colors">
+      <td class="px-4 py-3">
+        <div class="flex items-center gap-3">
+          <div class="size-8 rounded-full bg-muted flex items-center justify-center text-[10px] font-bold text-muted-foreground overflow-hidden">
+            <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(agent.name)}&background=random" alt="" class="size-full object-cover">
+          </div>
+          <span class="text-sm font-medium text-foreground">${agent.name}</span>
+        </div>
+      </td>
+      <td class="px-4 py-3 text-muted-foreground text-[13px]">${agent.email}</td>
+      <td class="px-4 py-3 text-[13px]">
+        <span class="font-semibold text-foreground">80/20 Standard</span>
+        <span class="text-muted-foreground text-xs ml-1">(80/20)</span>
+      </td>
+      <td class="px-4 py-3">
+        <div class="flex flex-wrap gap-1">
+          <span class="inline-flex items-center rounded-md border border-primary/20 bg-primary/5 px-2 py-0.5 text-[11px] font-medium text-primary">TC Fee</span>
+          <span class="inline-flex items-center rounded-md border border-primary/20 bg-primary/5 px-2 py-0.5 text-[11px] font-medium text-primary">RM Fee</span>
+        </div>
+      </td>
+      <td class="px-4 py-3 text-right">
+        <button class="opacity-0 group-hover:opacity-100 size-8 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted transition-all">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+        </button>
+      </td>
+    </tr>
+  `).join('');
+
+  section.innerHTML = `
+    <div class="flex items-center justify-between mb-2">
+      <h2 class="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Default Assignments</h2>
+    </div>
+    <div class="rounded-xl border bg-card shadow-sm overflow-hidden">
+      <table class="w-full text-left border-collapse">
+        <thead class="border-b bg-muted/30">
+          <tr>
+            <th class="px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Agent</th>
+            <th class="px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Email</th>
+            <th class="px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Commission Plan</th>
+            <th class="px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Default Fees</th>
+            <th class="px-4 py-2.5"></th>
+          </tr>
+        </thead>
+        <tbody class="divide-y">${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderDefaultsSection() {
+  // handled by renderAgentsTable now
 }
 
 function renderEmptySection(title, desc, emptyDesc, icon, action, onclick) {
@@ -1469,10 +1456,37 @@ function handleSaveFee() {
   }, 500);
 }
 
+function toggleDealTypeDropdown() {
+  const menu = document.getElementById('dt-dropdown');
+  menu.classList.toggle('open');
+  event.stopPropagation();
+}
+
+function updateDT() {
+  const checks = document.querySelectorAll('.dt-check');
+  const labels = ['Buyer Side', 'Listing Side', 'Lease', 'Landlord'];
+  const selected = [];
+  checks.forEach((c, i) => {
+    if (c.checked) selected.push(labels[i]);
+  });
+  const summary = document.getElementById('dt-summary');
+  if (selected.length === 0) summary.textContent = 'Select deal types';
+  else if (selected.length === 4) summary.textContent = 'All deal types';
+  else if (selected.length === 1) summary.textContent = selected[0];
+  else summary.textContent = `${selected[0]} +${selected.length - 1} more`;
+}
+
+// Close dropdown on click outside
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#dt-dropdown') && !e.target.closest('[onclick="toggleDealTypeDropdown()"]')) {
+    document.getElementById('dt-dropdown')?.classList.remove('open');
+  }
+});
+
 // ─── Tab helper ────────────────────────────────────────────────────────────────
 function setTabGroup(group, btn) {
   document.querySelectorAll(`[data-group="${group}"]`).forEach(b => b.dataset.active = 'false');
-  btn.dataset.active = 'true';
+  if (btn && btn.dataset) btn.dataset.active = 'true';
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────

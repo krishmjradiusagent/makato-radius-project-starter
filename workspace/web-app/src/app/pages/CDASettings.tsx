@@ -552,18 +552,25 @@ function AgentMultiSelect({
   );
   const selected = agents.filter((a) => selectedAgentIds.includes(a.id));
 
+  const allSelected = selectedAgentIds.length === agents.length;
+  let triggerLabel = "Select agents";
+  if (allSelected) {
+    triggerLabel = "Selected all agents";
+  } else if (selected.length === 1) {
+    triggerLabel = selected[0].name;
+  } else if (selected.length > 1) {
+    triggerLabel = `${selected[0].name} +${selected.length - 1} others`;
+  }
+
   return (
     <div className="flex flex-col gap-2">
       <DropdownMenu open={open} onOpenChange={setOpen}>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" className="h-10 w-full justify-between font-normal">
-            <span className="text-muted-foreground text-sm">Select agents</span>
-            <div className="flex items-center gap-1.5">
-              <Badge variant={selectedAgentIds.length > 0 ? "secondary" : "outline"} className="h-5 px-1.5 text-xs">
-                {selectedAgentIds.length}
-              </Badge>
-              <ChevronDown className="size-4 text-muted-foreground" />
-            </div>
+          <Button variant="outline" className="h-10 w-full justify-between font-normal px-3 overflow-hidden">
+            <span className={cn("truncate text-sm", selected.length === 0 ? "text-muted-foreground" : "text-foreground font-medium")}>
+              {triggerLabel}
+            </span>
+            <ChevronDown className="size-4 text-muted-foreground shrink-0 ml-2" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
@@ -585,6 +592,24 @@ function AgentMultiSelect({
             />
           </div>
           <DropdownMenuSeparator className="my-0" />
+          {filtered.length > 0 && (
+            <DropdownMenuItem
+              onSelect={(e) => e.preventDefault()}
+              onClick={() => {
+                const allSelected = filtered.every(a => selectedAgentIds.includes(a.id));
+                if (allSelected) {
+                  onChange(selectedAgentIds.filter(id => !filtered.find(a => a.id === id) || id === lockedAgentId));
+                } else {
+                  const newIds = new Set([...selectedAgentIds, ...filtered.map(a => a.id)]);
+                  onChange(Array.from(newIds));
+                }
+              }}
+              className="gap-3 cursor-pointer border-b rounded-none pb-2 mb-1"
+            >
+              <Checkbox checked={filtered.every(a => selectedAgentIds.includes(a.id))} className="pointer-events-none" />
+              <span className="flex-1 text-sm font-medium">Select All</span>
+            </DropdownMenuItem>
+          )}
           {filtered.map((agent) => (
             <DropdownMenuItem
               key={agent.id}
@@ -608,25 +633,6 @@ function AgentMultiSelect({
           )}
         </DropdownMenuContent>
       </DropdownMenu>
-      {selected.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {selected.map((agent) => (
-            <Badge key={agent.id} variant="secondary" className="gap-1 pr-1.5">
-              {agent.name}
-              {agent.id !== lockedAgentId && (
-                <button
-                  type="button"
-                  aria-label={`Remove ${agent.name}`}
-                  className="ml-0.5 rounded-full opacity-60 hover:opacity-100"
-                  onClick={() => toggle(agent.id)}
-                >
-                  <X className="size-3" />
-                </button>
-              )}
-            </Badge>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
@@ -731,6 +737,77 @@ function FeeMultiSelect({
         </div>
       )}
     </div>
+  );
+}
+
+function DealTypeMultiSelect({
+  selectedTypes,
+  onChange,
+}: {
+  selectedTypes: Record<string, boolean>;
+  onChange: (types: Record<string, boolean>) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const dealTypeOptions = ["Buyer", "Seller", "Lease", "Landlord"];
+  const selectedKeys = Object.keys(selectedTypes).filter(k => selectedTypes[k]);
+
+  const allSelected = selectedKeys.length === dealTypeOptions.length;
+  let triggerLabel = "Select deal types";
+  if (allSelected) {
+    triggerLabel = "Selected all deal types";
+  } else if (selectedKeys.length === 1) {
+    triggerLabel = selectedKeys[0].charAt(0).toUpperCase() + selectedKeys[0].slice(1);
+  } else if (selectedKeys.length > 1) {
+    triggerLabel = `${selectedKeys[0].charAt(0).toUpperCase() + selectedKeys[0].slice(1)} +${selectedKeys.length - 1} others`;
+  }
+
+  function toggle(type: string) {
+    const key = type.toLowerCase();
+    onChange({
+      ...selectedTypes,
+      [key]: !selectedTypes[key],
+    });
+  }
+
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" className="h-10 w-full justify-between font-normal px-3 overflow-hidden">
+          <span className={cn("truncate text-sm", selectedKeys.length === 0 ? "text-muted-foreground" : "text-foreground font-medium")}>
+            {triggerLabel}
+          </span>
+          <ChevronDown className="size-4 text-muted-foreground shrink-0 ml-2" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="min-w-[var(--radix-dropdown-menu-trigger-width)]" align="start">
+        <DropdownMenuItem
+          onSelect={(e) => e.preventDefault()}
+          onClick={() => {
+            const nextAllSelected = !allSelected;
+            const next: Record<string, boolean> = {};
+            dealTypeOptions.forEach(opt => {
+              next[opt.toLowerCase()] = nextAllSelected;
+            });
+            onChange(next);
+          }}
+          className="gap-3 cursor-pointer border-b rounded-none pb-2 mb-1"
+        >
+          <Checkbox checked={allSelected} className="pointer-events-none" />
+          <span className="flex-1 text-sm font-medium">Select All</span>
+        </DropdownMenuItem>
+        {dealTypeOptions.map((type) => (
+          <DropdownMenuItem
+            key={type}
+            onSelect={(e) => e.preventDefault()}
+            onClick={() => toggle(type)}
+            className="gap-3 cursor-pointer"
+          >
+            <Checkbox checked={Boolean(selectedTypes[type.toLowerCase()])} className="pointer-events-none" />
+            <span className="flex-1 text-sm font-medium">{type}</span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -969,12 +1046,15 @@ function PlanSetupFields({
 
       <div className="flex flex-col gap-2">
         <Label className="text-sm font-medium">Plan Type</Label>
-        <Tabs value={form.planType} onValueChange={(value) => onFormChange({ planType: value as PlanType })}>
-          <TabsList className="grid h-10 w-full grid-cols-2">
-            <TabsTrigger value="standard">Standard</TabsTrigger>
-            <TabsTrigger value="tiered">Tiered</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        <Select value={form.planType} onValueChange={(value) => onFormChange({ planType: value as PlanType })}>
+          <SelectTrigger className="h-10 w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="standard">Standard</SelectItem>
+            <SelectItem value="tiered">Tiered</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {form.planType === "standard" ? (
@@ -1042,14 +1122,32 @@ function PlanSetupFields({
         </div>
       )}
 
+      {form.planType === "tiered" && (
+        <>
+          <Separator />
+          <TierBuilder
+            form={form}
+            errors={errors}
+            onUpdateTier={onUpdateTier}
+            onAddTier={onAddTier}
+            onRemoveTier={onRemoveTier}
+          />
+        </>
+      )}
+
+      <Separator />
+
       <div className="flex flex-col gap-2">
         <Label className="text-sm font-medium">Fee Type</Label>
-        <Tabs value={form.feeType} onValueChange={(value) => onFormChange({ feeType: value as FeeType, feeAmount: "" })}>
-          <TabsList className="grid h-10 w-full grid-cols-2">
-            <TabsTrigger value="flat">Flat</TabsTrigger>
-            <TabsTrigger value="percentage">Percentage</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        <Select value={form.feeType} onValueChange={(value) => onFormChange({ feeType: value as FeeType, feeAmount: "" })}>
+          <SelectTrigger className="h-10 w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="flat">Flat</SelectItem>
+            <SelectItem value="percentage">Percentage</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="grid w-full grid-cols-2 gap-4">
@@ -1076,39 +1174,12 @@ function PlanSetupFields({
         </div>
       </div>
 
-      {form.planType === "tiered" && (
-        <>
-          <Separator />
-          <TierBuilder
-            form={form}
-            errors={errors}
-            onUpdateTier={onUpdateTier}
-            onAddTier={onAddTier}
-            onRemoveTier={onRemoveTier}
-          />
-        </>
-      )}
-
       <div className="flex flex-col gap-2">
         <Label className="text-sm font-medium">Deal Types</Label>
-        <div className="grid w-full grid-cols-2 gap-3">
-          {Object.keys(form.dealTypes).map((dealType) => (
-            <label key={dealType} className="flex w-full items-center gap-2 text-sm font-medium">
-              <Checkbox
-                checked={form.dealTypes[dealType]}
-                onCheckedChange={(checked) =>
-                  onFormChange({
-                    dealTypes: {
-                      ...form.dealTypes,
-                      [dealType]: checked === true,
-                    },
-                  })
-                }
-              />
-              {dealType.charAt(0).toUpperCase() + dealType.slice(1)}
-            </label>
-          ))}
-        </div>
+        <DealTypeMultiSelect
+          selectedTypes={form.dealTypes}
+          onChange={(dealTypes) => onFormChange({ dealTypes })}
+        />
         {errors.dealTypes && <p className="text-xs text-destructive">{errors.dealTypes}</p>}
       </div>
     </>
@@ -1143,14 +1214,14 @@ function AssignDefaultsDialog({
   const lockedAgentId = source.from === "agent" ? source.agentId : undefined;
   const lockedAgent = lockedAgentId ? agents.find((a) => a.id === lockedAgentId) : null;
 
-  const showPlanSelect = source.from !== "plan";
-  const showFeeSelect = source.from !== "fee";
+  const showPlanSelect = source.from !== "plan" && source.from !== "fee";
+  const showFeeSelect = source.from !== "fee" && source.from !== "plan";
   const showAssignTo = source.from !== "agent";
 
   const needsPlan = showPlanSelect;
   const isValid =
     (!needsPlan || Boolean(form.planId)) &&
-    (!showAssignTo || form.assignMode === "all" || form.selectedAgentIds.length > 0) &&
+    (!showAssignTo || form.selectedAgentIds.length > 0) &&
     (showAssignTo || (lockedAgentId !== undefined));
 
   function toggleFee(feeId: string) {
@@ -1278,31 +1349,13 @@ function AssignDefaultsDialog({
           {showAssignTo && (
             <div className="flex flex-col gap-3">
               <Label className="text-sm font-medium">Assign To</Label>
-              <Tabs
-                value={form.assignMode}
-                onValueChange={(value) => onFormChange({ assignMode: value as "all" | "specific" })}
-              >
-                <TabsList className="grid h-10 w-full grid-cols-2">
-                  <TabsTrigger value="specific">Specific agents</TabsTrigger>
-                  <TabsTrigger value="all">All agents</TabsTrigger>
-                </TabsList>
-              </Tabs>
-              {form.assignMode === "all" && (
-                <p className="text-xs text-muted-foreground">
-                  Applies to all current and future team members.
-                </p>
-              )}
-              {form.assignMode === "specific" && (
-                <>
-                  <AgentMultiSelect
-                    selectedAgentIds={form.selectedAgentIds}
-                    lockedAgentId={lockedAgentId}
-                    onChange={(selectedAgentIds) => onFormChange({ selectedAgentIds })}
-                  />
-                  {errors.selectedAgentIds && (
-                    <p className="text-xs text-destructive">{errors.selectedAgentIds}</p>
-                  )}
-                </>
+              <AgentMultiSelect
+                selectedAgentIds={form.selectedAgentIds}
+                lockedAgentId={lockedAgentId}
+                onChange={(selectedAgentIds) => onFormChange({ selectedAgentIds })}
+              />
+              {errors.selectedAgentIds && (
+                <p className="text-xs text-destructive">{errors.selectedAgentIds}</p>
               )}
             </div>
           )}
@@ -1427,7 +1480,6 @@ function DefaultAssignmentsTable({
   onClear: (assignment: AgentAssignment) => void;
   onAddDefaults: () => void;
 }) {
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [search, setSearch] = useState("");
 
   const filteredAssignments = useMemo(() => {
@@ -1444,19 +1496,6 @@ function DefaultAssignmentsTable({
     });
   }, [assignments, search]);
 
-  const toggleAll = () => {
-    if (selectedIds.length === filteredAssignments.length && filteredAssignments.length > 0) {
-      setSelectedIds([]);
-    } else {
-      setSelectedIds(filteredAssignments.map((a) => a.id));
-    }
-  };
-
-  const toggleOne = (id: string) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
-    );
-  };
 
   return (
     <section className="flex flex-col gap-4">
@@ -1477,36 +1516,13 @@ function DefaultAssignmentsTable({
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <div className="flex items-center gap-2">
-            {selectedIds.length > 0 && (
-              <Button variant="outline" size="sm" className="text-destructive border-destructive/20 hover:bg-destructive/5 h-9 px-4">
-                Bulk Clear ({selectedIds.length})
-              </Button>
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-primary text-primary hover:text-primary h-9 px-4"
-              onClick={onAddDefaults}
-            >
-              <Plus className="size-4" />
-              Add Defaults
-            </Button>
-          </div>
         </div>
       </div>
 
-      <Card className="rounded-[14px] border-border shadow-none overflow-hidden">
+      <div className="border border-border/50 rounded-[14px] overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow className="hover:bg-transparent border-b">
-              <TableHead className="w-[50px] pl-6">
-                <Checkbox
-                  checked={selectedIds.length === assignments.length && assignments.length > 0}
-                  onCheckedChange={toggleAll}
-                  aria-label="Select all"
-                />
-              </TableHead>
+            <TableRow className="hover:bg-transparent border-b bg-muted/20">
               <TableHead className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/60">Agent</TableHead>
               <TableHead className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/60">Email</TableHead>
               <TableHead className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/60">Commission Plan</TableHead>
@@ -1521,25 +1537,12 @@ function DefaultAssignmentsTable({
               const assignedFees = fees.filter((f) => assignment.feeIds.includes(f.id));
               if (!agent) return null;
               
-              const isSelected = selectedIds.includes(assignment.id);
-
               return (
                 <TableRow 
                   key={assignment.id} 
-                  className={cn(
-                    "group h-8 hover:bg-muted/30 transition-colors border-b last:border-0",
-                    isSelected && "bg-muted/20"
-                  )}
-                  onClick={() => toggleOne(assignment.id)}
+                  className="group hover:bg-muted/30 transition-colors border-b last:border-0"
                 >
-                  <TableCell className="pl-6" onClick={(e) => e.stopPropagation()}>
-                    <Checkbox
-                      checked={isSelected}
-                      onCheckedChange={() => toggleOne(assignment.id)}
-                      aria-label={`Select ${agent.name}`}
-                    />
-                  </TableCell>
-                  <TableCell>
+                  <TableCell className="pl-6">
                     <div className="flex items-center gap-3">
                       <Avatar className="size-8 shrink-0 border-2 border-background ring-1 ring-border/5 overflow-hidden">
                         <AvatarImage src={agent.avatarUrl} alt={agent.name} className="object-cover aspect-square" />
@@ -1582,7 +1585,7 @@ function DefaultAssignmentsTable({
                         <span className="text-xs text-muted-foreground/40 font-medium">None</span>
                       )}
                     </TableCell>
-                  <TableCell className="pr-6" onClick={(e) => e.stopPropagation()}>
+                  <TableCell className="pr-6">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button
@@ -1622,7 +1625,7 @@ function DefaultAssignmentsTable({
             })}
           </TableBody>
         </Table>
-      </Card>
+      </div>
     </section>
   );
 }
@@ -1697,7 +1700,7 @@ export function CDASettings() {
     const errs: AssignDefaultsErrors = {};
 
     if (source.from !== "plan" && !form.planId) errs.planId = "Commission plan required";
-    if (source.from !== "agent" && form.assignMode === "specific" && form.selectedAgentIds.length === 0) {
+    if (source.from !== "agent" && form.selectedAgentIds.length === 0) {
       errs.selectedAgentIds = "Select at least one agent";
     }
 
@@ -1714,9 +1717,7 @@ export function CDASettings() {
     const targetAgentIds =
       source.from === "agent"
         ? [source.agentId]
-        : form.assignMode === "all"
-          ? agents.map((a) => a.id)
-          : form.selectedAgentIds;
+        : form.selectedAgentIds;
 
     const newAssignments: AgentAssignment[] = targetAgentIds.map((agentId) => ({
       id: crypto.randomUUID(),
@@ -2079,19 +2080,84 @@ export function CDASettings() {
             Add Plan
           </Button>
         </div>
-        <Card className="rounded-[14px] border-border shadow-none">
-          <CardContent className="px-0 pb-0 [&:last-child]:pb-0">
-            {state.plans.map((plan) => (
-              <CommissionPlanCard
-                key={plan.id}
-                plan={plan}
-                onEdit={editPlan}
-                onAssign={assignDefaults}
-                onDuplicate={duplicatePlan}
-                onArchive={archivePlan}
-              />
-            ))}
-          </CardContent>
+        <Card className="rounded-[14px] border-border shadow-none overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent border-b">
+                <TableHead className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/60 pl-6">Commission Plan</TableHead>
+                <TableHead className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/60">Type</TableHead>
+                <TableHead className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/60">Agents Associated</TableHead>
+                <TableHead className="w-[50px] pr-6"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {state.plans.map((plan) => {
+                const assignedAgentIds = state.defaultAssignments.filter(a => a.planId === plan.id).map(a => a.agentId);
+                const assignedAgents = agents.filter(a => assignedAgentIds.includes(a.id));
+
+                return (
+                  <TableRow key={plan.id} className="group h-12 hover:bg-muted/30 transition-colors border-b last:border-0">
+                    <TableCell className="pl-6 font-medium text-sm text-foreground">
+                      {plan.name}
+                    </TableCell>
+                    <TableCell>
+                      <PlanTypeBadge type={plan.type} />
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <div className="flex -space-x-2">
+                          {assignedAgents.slice(0, 3).map((agent) => (
+                            <Avatar key={agent.id} className="size-6 border-2 border-background ring-1 ring-border/5">
+                              <AvatarImage src={agent.avatarUrl} alt={agent.name} />
+                              <AvatarFallback className="text-[8px]">{agent.name.split(" ").map((p) => p[0]).join("")}</AvatarFallback>
+                            </Avatar>
+                          ))}
+                          {assignedAgents.length > 3 && (
+                            <div className="flex size-6 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground border-2 border-background ring-1 ring-border/5">
+                              +{assignedAgents.length - 3}
+                            </div>
+                          )}
+                          {assignedAgents.length === 0 && (
+                            <span className="text-xs text-muted-foreground italic">None</span>
+                          )}
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="pr-6 text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" aria-label={`${plan.name} menu`} className="size-8">
+                            <MoreVertical className="size-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" sideOffset={8} className="w-[170px]">
+                          <DropdownMenuGroup>
+                            <DropdownMenuItem onClick={() => editPlan(plan)}>
+                              <Edit3 className="size-4" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => assignDefaults(plan)}>
+                              <UserCheck className="size-4" />
+                              Assign
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => duplicatePlan(plan)}>
+                              <Copy className="size-4" />
+                              Duplicate
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem variant="destructive" onClick={() => archivePlan(plan)}>
+                              <Archive className="size-4" />
+                              Archive
+                            </DropdownMenuItem>
+                          </DropdownMenuGroup>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
         </Card>
       </section>
     );
@@ -2184,13 +2250,24 @@ export function CDASettings() {
             Add Fee
           </Button>
         </div>
-        <Card className="rounded-[14px] border-border shadow-none">
-          <CardContent className="px-0 pb-0 [&:last-child]:pb-0">
-            {state.fees.map((fee) => (
-              <div key={fee.id} className="group flex min-h-[66px] items-center justify-between border-b px-6 py-3 last:border-b-0 hover:bg-muted/30 transition-colors duration-150 cursor-pointer">
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium leading-5 text-foreground">{fee.name}</p>
+        <Card className="rounded-[14px] border-border shadow-none overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent border-b">
+                <TableHead className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/60 pl-6">Fee Name</TableHead>
+                <TableHead className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/60">Type</TableHead>
+                <TableHead className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/60">Timing</TableHead>
+                <TableHead className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/60">Applies To</TableHead>
+                <TableHead className="w-[50px] pr-6"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {state.fees.map((fee) => (
+                <TableRow key={fee.id} className="group h-12 hover:bg-muted/30 transition-colors border-b last:border-0">
+                  <TableCell className="pl-6 font-medium text-sm text-foreground">
+                    {fee.name}
+                  </TableCell>
+                  <TableCell>
                     <Badge 
                       variant="secondary" 
                       className={cn(
@@ -2200,76 +2277,75 @@ export function CDASettings() {
                     >
                       {fee.type === "flat" ? "Flat" : "Percentage"}
                     </Badge>
-                  </div>
-                  <div className="flex flex-nowrap items-center gap-2 text-[11px] text-muted-foreground/80 overflow-hidden">
-                    <span className="font-medium text-foreground">{fee.type === "flat" ? `$${fee.amount} flat` : `${fee.amount}%`}</span>
-                    <span className="text-muted-foreground/30 mx-0.5">·</span>
+                  </TableCell>
+                  <TableCell>
                     <span className={cn(
-                      "font-semibold",
+                      "text-xs font-semibold",
                       fee.timing === "pre-split" ? "text-blue-600" : "text-amber-600"
                     )}>
                       {fee.timing === "pre-split" ? "Pre-Split" : "Post-Split"}
                     </span>
-                    <div className="flex items-center gap-2 border-l border-border/50 pl-4 ml-2">
-                      <span className="text-[11px] font-medium text-muted-foreground/60">Applies to</span>
+                  </TableCell>
+                  <TableCell>
+                    {fee.appliesToMode === "team" ? (
+                      <Badge variant="outline" className="text-[10px] h-4 px-1.5 font-medium border-primary/20 text-primary bg-primary/5">
+                        Team
+                      </Badge>
+                    ) : (
                       <div className="flex items-center gap-2">
-                        {fee.appliesToMode === "team" ? (
-                          <Badge variant="outline" className="text-[10px] h-4 px-1.5 font-medium border-primary/20 text-primary bg-primary/5">
-                            Team
-                          </Badge>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <div className="flex -space-x-2">
-                              {agents.filter(a => fee.agentIds.includes(a.id)).slice(0, 3).map((agent) => (
-                                <Avatar key={agent.id} className="size-5 border-2 border-background ring-1 ring-border/5">
-                                  <AvatarImage src={agent.avatarUrl} alt={agent.name} />
-                                  <AvatarFallback className="text-[7px]">{agent.name.split(" ").map((p) => p[0]).join("")}</AvatarFallback>
-                                </Avatar>
-                              ))}
-                              {fee.agentIds.length > 3 && (
-                                <div className="flex size-5 items-center justify-center rounded-full bg-muted text-[9px] font-semibold text-muted-foreground border-2 border-background ring-1 ring-border/5">
-                                  +{fee.agentIds.length - 3}
-                                </div>
-                              )}
+                        <div className="flex -space-x-2">
+                          {agents.filter(a => fee.agentIds.includes(a.id)).slice(0, 3).map((agent) => (
+                            <Avatar key={agent.id} className="size-6 border-2 border-background ring-1 ring-border/5">
+                              <AvatarImage src={agent.avatarUrl} alt={agent.name} />
+                              <AvatarFallback className="text-[8px]">{agent.name.split(" ").map((p) => p[0]).join("")}</AvatarFallback>
+                            </Avatar>
+                          ))}
+                          {fee.agentIds.length > 3 && (
+                            <div className="flex size-6 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground border-2 border-background ring-1 ring-border/5">
+                              +{fee.agentIds.length - 3}
                             </div>
-                            <span className="text-[11px] font-medium text-muted-foreground/60">agents</span>
-                          </div>
-                        )}
+                          )}
+                          {fee.agentIds.length === 0 && (
+                            <span className="text-xs text-muted-foreground italic">None</span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="size-8" onClick={(event) => event.stopPropagation()}>
-                      <MoreVertical className="size-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" sideOffset={8} className="w-[170px]">
-                    <DropdownMenuGroup>
-                      <DropdownMenuItem onClick={() => editFee(fee)}>
-                        <Edit3 className="size-4" />
-                        Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => assignFromFee(fee)}>
-                        <UserCheck className="size-4" />
-                        Assign
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => duplicateFee(fee)}>
-                        <Copy className="size-4" />
-                        Duplicate
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem variant="destructive" onClick={() => setState((current) => ({ ...current, archiveTarget: { type: "fee", id: fee.id, name: fee.name } }))}>
-                        <Archive className="size-4" />
-                        Archive
-                      </DropdownMenuItem>
-                    </DropdownMenuGroup>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            ))}
-          </CardContent>
+                    )}
+                  </TableCell>
+                  <TableCell className="pr-6 text-right">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="size-8">
+                          <MoreVertical className="size-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" sideOffset={8} className="w-[170px]">
+                        <DropdownMenuGroup>
+                          <DropdownMenuItem onClick={() => editFee(fee)}>
+                            <Edit3 className="size-4" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => assignFromFee(fee)}>
+                            <UserCheck className="size-4" />
+                            Assign
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => duplicateFee(fee)}>
+                            <Copy className="size-4" />
+                            Duplicate
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem variant="destructive" onClick={() => setState((current) => ({ ...current, archiveTarget: { type: "fee", id: fee.id, name: fee.name } }))}>
+                            <Archive className="size-4" />
+                            Archive
+                          </DropdownMenuItem>
+                        </DropdownMenuGroup>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </Card>
       </section>
     );

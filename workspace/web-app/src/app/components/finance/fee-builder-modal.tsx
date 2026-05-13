@@ -12,9 +12,16 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Switch } from "../ui/switch";
-import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card";
 import { ScrollArea } from "../ui/scroll-area";
+import { Separator } from "../ui/separator";
 
 export type FeeTier = {
   id: string;
@@ -239,40 +246,42 @@ export function FeeBuilderModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[82vh] w-[600px] max-w-[calc(100vw-48px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[600px]">
+      <DialogContent className="flex max-h-[90vh] w-[600px] max-w-[calc(100vw-48px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[600px]">
         <DialogHeader className="border-b px-6 pb-4 pt-5">
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>Configure fee type details.</DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="min-h-0 flex-1">
+        <ScrollArea className="min-h-0">
           <div className="flex flex-col gap-3 px-6 py-4">
 
             {/* Fee Setup */}
-            <Card className="shadow-none">
-              <div className="px-4 pt-3 pb-4 space-y-3.5">
-                <p className="text-sm font-medium">Fee Setup</p>
-                <div className="space-y-1.5">
-                  <Label htmlFor="fee-name">Fee Name</Label>
-                  <Input
-                    id="fee-name"
-                    className="h-10"
-                    placeholder="e.g., Transaction Coordinator Fee"
-                    value={draft.name}
-                    aria-invalid={Boolean(errors.name)}
-                    onChange={(event) => updateField("name", event.target.value)}
-                  />
-                  {errors.name ? <p className="text-xs text-destructive">{errors.name}</p> : null}
-                </div>
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="fee-name">Fee Name</Label>
+                <Input
+                  id="fee-name"
+                  className="h-10"
+                  placeholder="e.g., Transaction Coordinator Fee"
+                  value={draft.name}
+                  aria-invalid={Boolean(errors.name)}
+                  onChange={(event) => updateField("name", event.target.value)}
+                />
+                {errors.name ? <p className="text-xs text-destructive">{errors.name}</p> : null}
+              </div>
 
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label>Fee Type</Label>
-                  <Tabs value={draft.type} onValueChange={(value) => updateField("type", value as FeeTypeDraft["type"])}>
-                    <TabsList className="grid h-10 w-full grid-cols-2">
-                      <TabsTrigger value="flat">Flat</TabsTrigger>
-                      <TabsTrigger value="percentage">Percentage</TabsTrigger>
-                    </TabsList>
-                  </Tabs>
+                  <Select value={draft.type} onValueChange={(value) => updateField("type", value as FeeTypeDraft["type"])}>
+                    <SelectTrigger className="h-10">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="flat">Flat</SelectItem>
+                      <SelectItem value="percentage">Percentage</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-1.5">
@@ -285,21 +294,26 @@ export function FeeBuilderModal({
                   />
                   {errors.amount ? <p className="text-xs text-destructive">{errors.amount}</p> : null}
                 </div>
+              </div>
 
-                <div className="space-y-1.5">
-                  <Label>When Applied</Label>
-                  <Tabs value={draft.timing} onValueChange={(value) => updateField("timing", value as FeeTypeDraft["timing"])}>
-                    <TabsList className="grid h-10 w-full grid-cols-2">
-                      <TabsTrigger value="pre-split">Pre-Split</TabsTrigger>
-                      <TabsTrigger value="post-split">Post-Split</TabsTrigger>
-                    </TabsList>
-                  </Tabs>
-                </div>
+              <div className="space-y-1.5">
+                <Label>When Applied</Label>
+                <Select value={draft.timing} onValueChange={(value) => updateField("timing", value as FeeTypeDraft["timing"])}>
+                  <SelectTrigger className="h-10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pre-split">Pre-Split</SelectItem>
+                    <SelectItem value="post-split">Post-Split</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
+              <div className="grid grid-cols-2 gap-4">
                 <div className="flex items-center justify-between rounded-md border px-3 py-2.5">
                   <div className="space-y-0.5">
                     <Label htmlFor="sliding-scale" className="text-sm">Sliding Scale</Label>
-                    <p className="text-xs text-muted-foreground">Enable tiered fee values.</p>
+                    <p className="text-xs text-muted-foreground truncate">Enable tiered fee values.</p>
                   </div>
                   <Switch
                     id="sliding-scale"
@@ -311,7 +325,7 @@ export function FeeBuilderModal({
                 <div className="flex items-center justify-between rounded-md border px-3 py-2.5">
                   <div className="space-y-0.5">
                     <Label htmlFor="contributes-cap" className="text-sm">Contributes to Cap</Label>
-                    <p className="text-xs text-muted-foreground">Count toward cap calculations.</p>
+                    <p className="text-xs text-muted-foreground truncate">Count toward cap.</p>
                   </div>
                   <Switch
                     id="contributes-cap"
@@ -320,26 +334,28 @@ export function FeeBuilderModal({
                   />
                 </div>
               </div>
-            </Card>
+            </div>
+
+            <Separator className="my-1" />
 
             {/* Sliding Scale Tiers — only shown when ON */}
             {draft.slidingScale ? (
-              <Card className="shadow-none">
-                <CardHeader className="pb-2 pt-4 px-4">
-                  <CardTitle className="text-sm font-medium">Sliding Scale Tiers</CardTitle>
-                  <CardDescription className="text-xs">Set fee amounts by commission range.</CardDescription>
-                </CardHeader>
-                <CardContent className="px-4 pb-4">
+              <div className="space-y-3 pt-2">
+                <div className="flex flex-col gap-1 px-1">
+                  <h3 className="text-sm font-semibold">Sliding Scale Tiers</h3>
+                  <p className="text-xs text-muted-foreground">Set fee amounts by commission range.</p>
+                </div>
+                <div className="px-1 pb-4">
                   <TierRows draft={draft} onDraftChange={setDraft} />
                   {errors.tiers ? <p className="text-xs text-destructive mt-2">{errors.tiers}</p> : null}
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             ) : null}
 
           </div>
         </ScrollArea>
 
-        <DialogFooter className="shrink-0 border-t bg-background px-6 py-3">
+        <DialogFooter className="shrink-0 border-t bg-background px-6 py-[14px]">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
