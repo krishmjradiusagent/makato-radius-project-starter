@@ -403,13 +403,14 @@ export function CommissionBreakdown() {
                     <div className="mt-0.5 flex items-center gap-2">
                       <span className="text-xs text-muted-foreground">{side.subline}</span>
                       <span className="text-xs text-muted-foreground/40">|</span>
-                      <button onClick={(e) => { e.stopPropagation(); setShowAwardDialog(true); }} className="text-xs underline underline-offset-2" style={{ color: "#5A5FF2" }}>
+                      <Badge
+                        variant="outline"
+                        className="cursor-pointer rounded-full px-2 py-0 text-[11px] font-medium hover:opacity-80"
+                        style={{ color: "#5A5FF2", borderColor: "#5A5FF2" }}
+                        onClick={(e) => { e.stopPropagation(); setShowAwardDialog(true); }}
+                      >
                         Award {side.award}%
-                      </button>
-                      <span className="text-xs text-muted-foreground/40">|</span>
-                      <button onClick={(e) => { e.stopPropagation(); setAddAgentSideId(side.id); setAgentSearch(""); setPendingAgent(null); setAgentAllocations({}); setShowAddAgentDialog(true); }} className="text-xs underline underline-offset-2" style={{ color: "#5A5FF2" }}>
-                        + Agent
-                      </button>
+                      </Badge>
                     </div>
                   </div>
                   <div className="shrink-0 text-right">
@@ -468,7 +469,7 @@ export function CommissionBreakdown() {
               <>
                 {/* Agent header */}
                 <div className="border-b px-5 py-4">
-                  <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-3">
                       <Avatar className="size-10 border">
                         <AvatarFallback className="text-sm font-bold">{initials(selectedAgent.agent.name)}</AvatarFallback>
@@ -478,21 +479,7 @@ export function CommissionBreakdown() {
                         <p className="text-xs text-muted-foreground">{selectedAgent.agent.role} · {selectedAgent.side.title}</p>
                       </div>
                     </div>
-                  </div>
-                  <div className="mt-3 flex items-center gap-2">
-                    {/* Delete — red trash */}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 gap-1.5 rounded-lg border-destructive/40 px-3 text-xs text-destructive hover:bg-destructive/5 hover:text-destructive"
-                      onClick={() => setShowDeleteConfirm(true)}
-                    >
-                      <Trash2 className="size-3.5" />
-                      Delete
-                    </Button>
-
-                    <Button variant="outline" size="sm" className="h-7 rounded-lg px-3 text-xs" onClick={() => setShowStatementDialog(true)}>Statement</Button>
-
+                    <div className="flex items-center gap-2">
                     {/* Apply plan — dropdown (team_lead + radius only) */}
                     {role !== "agent" ? (
                       <DropdownMenu>
@@ -529,6 +516,16 @@ export function CommissionBreakdown() {
                         </DropdownMenuContent>
                       </DropdownMenu>
                     ) : null}
+                    <Button variant="outline" size="sm" className="h-7 rounded-lg px-3 text-xs" onClick={() => setShowStatementDialog(true)}>Statement</Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 w-7 rounded-lg p-0 border-destructive/40 text-destructive hover:bg-destructive/5 hover:text-destructive"
+                      onClick={() => setShowDeleteConfirm(true)}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                    </div>
                   </div>
                 </div>
 
@@ -682,17 +679,27 @@ export function CommissionBreakdown() {
                     <button onClick={() => setFeeDialogTiming("post-split")} className="flex w-full items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-colors hover:bg-[#5A5FF2]/15" style={{ color: "#5A5FF2", backgroundColor: "rgb(90 95 242 / 0.08)" }}>
                       <Plus className="size-3.5" />Post-commission deduction
                     </button>
-                    <button className="flex w-full items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-colors hover:bg-[#5A5FF2]/15" style={{ color: "#5A5FF2", backgroundColor: "rgb(90 95 242 / 0.08)" }}>
-                      <Plus className="size-3.5" />Office income
-                    </button>
                   </div>
-                </div>
 
-                <div className="border-t px-5 py-4">
-                  <div className="flex items-center justify-between rounded-xl border bg-muted/40 px-5 py-4">
-                    <p className="text-sm font-semibold text-muted-foreground">Office Net</p>
-                    <p className="text-2xl font-bold tracking-tight">{currency(officeNet)}</p>
+                  <Separator className="my-4" />
+
+                  {/* Office Net card */}
+                  <div className="rounded-xl border bg-muted/30 px-4 py-3.5">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground">Office Net</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground/60">After agent commissions &amp; deductions</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-2xl font-bold tracking-tight">{currency(officeNet)}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">{Math.round((officeNet / (grossIncome || 1)) * 100)}% of gross</p>
+                      </div>
+                    </div>
                   </div>
+
+                  <button className="mt-2 flex w-full items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-colors hover:bg-[#5A5FF2]/15" style={{ color: "#5A5FF2", backgroundColor: "rgb(90 95 242 / 0.08)" }}>
+                    <Plus className="size-3.5" />Office income
+                  </button>
                 </div>
 
                 <div className="border-t px-5 py-3">
