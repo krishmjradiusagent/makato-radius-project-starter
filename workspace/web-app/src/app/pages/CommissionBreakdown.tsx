@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import {
   Building2,
   ChevronRight,
+  Download,
   HelpCircle,
   Info,
   Pencil,
@@ -258,6 +259,9 @@ export function CommissionBreakdown() {
   const [showAgentPreSplitDialog, setShowAgentPreSplitDialog] = useState(false);
   const [agentPreSplitLabel, setAgentPreSplitLabel] = useState("");
   const [agentPreSplitAmount, setAgentPreSplitAmount] = useState("");
+  const [showRadiusFeeDialog, setShowRadiusFeeDialog] = useState(false);
+  const [radiusFeeLabel, setRadiusFeeLabel] = useState("");
+  const [radiusFeeAmount, setRadiusFeeAmount] = useState("");
 
   const [preSplitDeductions, setPreSplitDeductions] = useState<Record<string, Array<{ id: string; name: string; amount: number }>>>({
     a1: [
@@ -332,7 +336,13 @@ export function CommissionBreakdown() {
   }
 
   function handleFeeAdded(fee: FeeTypeDraft) {
-    toast.success(`"${fee.name}" ${fee.timing} deduction added`);
+    if (selectedAgentId && fee.timing === "post-split") {
+      setPostSplitDeductions((prev) => ({
+        ...prev,
+        [selectedAgentId]: [...(prev[selectedAgentId] ?? []), { id: `ps-${Date.now()}`, name: fee.name, amount: fee.amount ?? 0 }],
+      }));
+    }
+    toast.success(`"${fee.name}" deduction added`);
     setFeeDialogTiming(null);
   }
 
@@ -421,6 +431,19 @@ export function CommissionBreakdown() {
             {isAgent && txStatus === "draft" && (
               <Button size="sm" className="h-8 shrink-0 rounded-lg px-4 text-xs" onClick={() => setShowSubmitDialog(true)}>
                 Submit for approval
+              </Button>
+            )}
+            {/* Download CDA — visible to all when approved */}
+            {txStatus === "approved" && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 gap-1.5 rounded-lg px-4 text-xs"
+                style={{ color: "#5A5FF2", borderColor: "#5A5FF2" }}
+                onClick={() => toast.success("CDA PDF downloaded")}
+              >
+                <Download className="size-3.5" />
+                Download CDA
               </Button>
             )}
             {/* TL/Radius: approve or reject when submitted */}
@@ -726,6 +749,17 @@ export function CommissionBreakdown() {
                       Post-split deduction
                     </button>
                   )}
+                  {/* Radius only: add a flagged Radius fee */}
+                  {canEditAll && txStatus !== "approved" && (
+                    <button
+                      onClick={() => setShowRadiusFeeDialog(true)}
+                      className="mt-1 flex w-full items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-colors hover:bg-muted/80"
+                      style={{ color: "var(--muted-foreground)", backgroundColor: "var(--muted)" }}
+                    >
+                      <Plus className="size-3.5" />
+                      Add Radius fee
+                    </button>
+                  )}
 
                   <Separator className="my-3" />
 
@@ -962,6 +996,49 @@ export function CommissionBreakdown() {
               }}
             >
               Add
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Radius fee dialog */}
+      <Dialog open={showRadiusFeeDialog} onOpenChange={(open) => { setShowRadiusFeeDialog(open); if (!open) { setRadiusFeeLabel(""); setRadiusFeeAmount(""); } }}>
+        <DialogContent className="gap-0 p-0 sm:max-w-sm">
+          <DialogHeader className="border-b px-6 pb-4 pt-5">
+            <DialogTitle>Add Radius fee</DialogTitle>
+            <DialogDescription>Fee will be flagged as a Radius fee — agents and team leads cannot edit or remove it.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 px-6 py-4">
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground">Fee name</p>
+              <Input value={radiusFeeLabel} onChange={(e) => setRadiusFeeLabel(e.target.value)} placeholder="e.g. Compliance fee" className="h-9" />
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground">Amount</p>
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                <Input value={radiusFeeAmount} onChange={(e) => setRadiusFeeAmount(e.target.value.replace(/[^0-9.]/g, ""))} placeholder="0" inputMode="decimal" className="h-9 pl-7" />
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="border-t px-6 py-4">
+            <Button variant="outline" onClick={() => setShowRadiusFeeDialog(false)}>Cancel</Button>
+            <Button
+              disabled={!radiusFeeLabel.trim() || !radiusFeeAmount}
+              style={{ backgroundColor: "#5A5FF2" }}
+              onClick={() => {
+                if (!selectedAgentId) return;
+                setPostSplitDeductions((prev) => ({
+                  ...prev,
+                  [selectedAgentId]: [...(prev[selectedAgentId] ?? []), { id: `rf-${Date.now()}`, name: radiusFeeLabel.trim(), amount: Math.round(Number(radiusFeeAmount)), isRadiusFee: true }],
+                }));
+                toast.success(`Radius fee "${radiusFeeLabel}" added`);
+                setShowRadiusFeeDialog(false);
+                setRadiusFeeLabel("");
+                setRadiusFeeAmount("");
+              }}
+            >
+              Add fee
             </Button>
           </DialogFooter>
         </DialogContent>
