@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { motion } from "framer-motion";
 import { useNavigate } from "react-router";
 import {
   Building2,
@@ -28,8 +29,10 @@ import {
   Flag,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
   BarChart3,
   ShieldCheck,
+  User2,
 } from "lucide-react";
 import { CDAFlowSwitcher } from "../components/finance/cda-flow-switcher";
 import { Badge } from "../components/ui/badge";
@@ -977,67 +980,90 @@ export function CommissionBreakdown() {
         key={agent.id}
         onClick={() => setSelectedNode(`agent-${agent.id}`)}
         className={cn(
-          "group flex items-center justify-between py-2 px-4 cursor-pointer transition-colors border-l-2 border-transparent",
-          isSelected ? "bg-primary/5 border-primary" : "hover:bg-muted/30"
+          "group flex items-center justify-between py-3.5 px-4 cursor-pointer transition-all border-l-2 border-transparent",
+          isSelected ? "bg-primary/[0.03] border-primary" : "hover:bg-muted/40"
         )}
       >
-        <div className="flex items-center gap-2.5 min-w-0">
-          <Avatar className="size-6 shrink-0">
-            <AvatarImage src={agent.avatar} />
-            <AvatarFallback className="text-[8px] font-bold">{agent.name.charAt(0)}</AvatarFallback>
-          </Avatar>
+        <div className="flex items-center gap-3.5 min-w-0">
+          <div className="relative">
+            <Avatar className="size-9 shrink-0 ring-2 ring-background border shadow-sm">
+              <AvatarImage src={agent.avatar} />
+              <AvatarFallback className="text-[10px] font-bold bg-muted text-muted-foreground">
+                {agent.name.charAt(0)}
+              </AvatarFallback>
+            </Avatar>
+            <div className="absolute -bottom-1 -right-1 size-4 rounded-full bg-white flex items-center justify-center shadow-sm border border-border/50">
+              <User2 className="size-2.5 text-muted-foreground" />
+            </div>
+          </div>
           <div className="min-w-0">
-            <p className="text-[11px] font-bold leading-none">{agent.name}</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5 font-medium uppercase tracking-tight">
-              {agent.allocationPct}% · {agent.planName}
+            <p className="text-[13px] font-bold leading-tight tracking-tight text-foreground/90">
+              {agent.name}
             </p>
+            <div className="flex items-center gap-1.5 mt-1">
+              <Badge variant="outline" className="h-4 px-1.5 text-[9px] font-semibold bg-blue-50/50 border-blue-200/50 text-blue-700 uppercase tracking-wider">
+                {agent.allocationPct}% Split
+              </Badge>
+              <span className="text-[9px] text-muted-foreground/60 font-semibold uppercase tracking-widest">
+                {agent.planName}
+              </span>
+            </div>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
           <div className="text-right">
-            <p className="text-[12px] font-bold tabular-nums">
+            <p className="text-[14px] font-extrabold tabular-nums tracking-tight text-foreground">
               ${calcs.netAgentCommission.toLocaleString()}
             </p>
+            <p className="text-[9px] text-muted-foreground/70 font-bold uppercase tracking-wider">
+              Net Payout
+            </p>
           </div>
-          {!isLocked && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-5 opacity-0 group-hover:opacity-100"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <MoreHorizontal className="size-3" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem onClick={() => setSelectedNode(`agent-${agent.id}`)}>
-                  <Calculator className="size-4 mr-2" /> View Inspector
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => setIsDeductionOpen(true)}
-                  disabled={!isEditable}
-                >
-                  <Plus className="size-4 mr-2" /> Add Deduction
-                </DropdownMenuItem>
-                {role !== "agent" && (
-                  <>
-                    <DropdownMenuItem
-                      onClick={() => setIsAgentOpen(true)}
-                      disabled={!isEditable}
-                    >
-                      <Edit className="size-4 mr-2" /> Change Plan
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem className="text-destructive" disabled={!isEditable}>
-                      <Trash2 className="size-4 mr-2" /> Remove Agent
-                    </DropdownMenuItem>
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+          <div className="flex items-center gap-1">
+            {!isLocked && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <MoreHorizontal className="size-4 text-muted-foreground" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem onClick={() => setSelectedNode(`agent-${agent.id}`)}>
+                    <Calculator className="size-4 mr-2" /> View Inspector
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setIsDeductionOpen(true)}
+                    disabled={!isEditable}
+                  >
+                    <Plus className="size-4 mr-2" /> Add Deduction
+                  </DropdownMenuItem>
+                  {role !== "agent" && (
+                    <>
+                      <DropdownMenuItem
+                        onClick={() => setIsAgentOpen(true)}
+                        disabled={!isEditable}
+                      >
+                        <Edit className="size-4 mr-2" /> Change Plan
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem className="text-destructive" disabled={!isEditable}>
+                        <Trash2 className="size-4 mr-2" /> Remove Agent
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            <ChevronRight className={cn(
+              "size-4 text-muted-foreground/30 transition-transform group-hover:translate-x-0.5",
+              isSelected && "text-primary/50"
+            )} />
+          </div>
         </div>
       </div>
     );
@@ -1455,58 +1481,64 @@ export function CommissionBreakdown() {
       {renderWorkflowBanner()}
 
       {/* Financial Strip */}
-      <div className="h-12 border-b bg-zinc-100 dark:bg-zinc-950 flex items-center px-6 shrink-0 overflow-x-auto relative group overflow-hidden">
-        {/* MagicUI-inspired Shiny Animation Overlay */}
-        <div 
-          className="absolute inset-0 pointer-events-none bg-[linear-gradient(110deg,transparent,40%,rgba(255,255,255,0.9),50%,transparent,60%)] bg-[length:200%_100%] z-0" 
-          style={{ 
-            animation: "shimmer 2s infinite linear",
+      <div className="h-18 border-b bg-white dark:bg-zinc-950 flex items-center px-8 shrink-0 overflow-x-auto relative group overflow-hidden">
+        {/* MagicUI Shiny Animation Effect */}
+        <motion.div
+          initial={{ "--x": "100%", scale: 1 }}
+          animate={{ "--x": "-100%" }}
+          transition={{
+            repeat: Infinity,
+            repeatType: "loop",
+            duration: 3,
+            ease: "linear",
           }}
+          className="absolute inset-0 pointer-events-none z-0"
+          style={{
+            background: "linear-gradient(110deg, transparent, 45%, rgba(0,0,0,0.03), 50%, rgba(0,0,0,0.06), 55%, transparent)",
+            backgroundSize: "200% 100%",
+            backgroundPosition: "var(--x) 0",
+          } as any}
         />
         
-        <style dangerouslySetInnerHTML={{ __html: `
-          @keyframes shimmer {
-            0% { background-position: 100% 0; }
-            100% { background-position: -100% 0; }
-          }
-        `}} />
-
-        <div className="flex items-center shrink-0 relative z-10 h-full">
-          <div className="flex items-center gap-2.5 px-3 py-1 rounded-md transition-colors hover:bg-white/60 group/item">
-            <div className="size-7 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 transition-transform group-hover/item:scale-110">
-              <BarChart3 className="size-3.5" />
+        <div className="flex items-center shrink-0 relative z-10 h-full w-full justify-start gap-4">
+          {/* Total GCI */}
+          <div className="flex items-center gap-4 px-4 py-2 rounded-xl transition-all hover:bg-blue-50/50 group/item">
+            <div className="size-10 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 transition-all group-hover/item:scale-105 group-hover/item:rotate-3 shadow-sm border border-blue-100/50">
+              <BarChart3 className="size-5" />
             </div>
             <div className="flex flex-col">
-              <span className="text-[9px] font-bold uppercase tracking-wider text-blue-600/60 leading-none mb-0.5">Total GCI</span>
-              <span className="text-[12px] font-bold tabular-nums text-blue-900 dark:text-blue-100 leading-none">
+              <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-blue-600/70 leading-none mb-1.5">Total GCI</span>
+              <span className="text-[16px] font-extrabold tabular-nums text-blue-950 dark:text-blue-50 leading-none tracking-tight">
                 ${gciTotal.toLocaleString()}
               </span>
             </div>
           </div>
 
-          <Separator orientation="vertical" className="h-8 w-px bg-slate-300 mx-2" />
+          <Separator orientation="vertical" className="h-10 w-px bg-slate-200/60" />
 
-          <div className="flex items-center gap-2.5 px-3 py-1 rounded-md transition-colors hover:bg-white/60 group/item">
-            <div className="size-7 rounded-full bg-orange-50 flex items-center justify-center text-orange-600 transition-transform group-hover/item:scale-110">
-              <Calculator className="size-3.5" />
+          {/* After Deductions */}
+          <div className="flex items-center gap-4 px-4 py-2 rounded-xl transition-all hover:bg-orange-50/50 group/item">
+            <div className="size-10 rounded-2xl bg-orange-50 flex items-center justify-center text-orange-600 transition-all group-hover/item:scale-105 group-hover/item:-rotate-3 shadow-sm border border-orange-100/50">
+              <Calculator className="size-5" />
             </div>
             <div className="flex flex-col">
-              <span className="text-[9px] font-bold uppercase tracking-wider text-orange-600/60 leading-none mb-0.5">After Deductions</span>
-              <span className="text-[12px] font-bold tabular-nums text-orange-900 dark:text-orange-100 leading-none">
+              <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-orange-600/70 leading-none mb-1.5">After Deductions</span>
+              <span className="text-[16px] font-extrabold tabular-nums text-orange-950 dark:text-orange-50 leading-none tracking-tight">
                 ${grossAfterDeductions.toLocaleString()}
               </span>
             </div>
           </div>
 
-          <Separator orientation="vertical" className="h-8 w-px bg-slate-300 mx-2" />
+          <Separator orientation="vertical" className="h-10 w-px bg-slate-200/60" />
 
-          <div className="flex items-center gap-2.5 px-3 py-1 rounded-md transition-colors hover:bg-white/60 group/item">
-            <div className="size-7 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 transition-transform group-hover/item:scale-110">
-              <Users className="size-3.5" />
+          {/* Net to Agents */}
+          <div className="flex items-center gap-4 px-4 py-2 rounded-xl transition-all hover:bg-emerald-50/50 group/item">
+            <div className="size-10 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600 transition-all group-hover/item:scale-105 group-hover/item:rotate-3 shadow-sm border border-emerald-100/50">
+              <Users className="size-5" />
             </div>
             <div className="flex flex-col">
-              <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-600/60 leading-none mb-0.5">Net to Agents</span>
-              <span className="text-[12px] font-bold tabular-nums text-emerald-900 dark:text-emerald-100 leading-none">
+              <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-emerald-600/70 leading-none mb-1.5">Net to Agents</span>
+              <span className="text-[16px] font-extrabold tabular-nums text-emerald-950 dark:text-emerald-50 leading-none tracking-tight">
                 ${netPayable.toLocaleString()}
               </span>
             </div>
@@ -1514,14 +1546,14 @@ export function CommissionBreakdown() {
 
           {role !== "agent" && (
             <>
-              <Separator orientation="vertical" className="h-8 w-px bg-slate-300 mx-2" />
-              <div className="flex items-center gap-2.5 px-3 py-1 rounded-md transition-colors hover:bg-white/60 group/item">
-                <div className="size-7 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 transition-transform group-hover/item:scale-110">
-                  <Building2 className="size-3.5" />
+              <Separator orientation="vertical" className="h-10 w-px bg-slate-200/60" />
+              <div className="flex items-center gap-4 px-4 py-2 rounded-xl transition-all hover:bg-indigo-50/50 group/item">
+                <div className="size-10 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 transition-all group-hover/item:scale-105 group-hover/item:-rotate-3 shadow-sm border border-indigo-100/50">
+                  <Building2 className="size-5" />
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-[9px] font-bold uppercase tracking-wider text-indigo-600/60 leading-none mb-0.5">Company Dollar</span>
-                  <span className="text-[12px] font-bold tabular-nums text-indigo-900 dark:text-indigo-100 leading-none">
+                  <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-indigo-600/70 leading-none mb-1.5">Company Dollar</span>
+                  <span className="text-[16px] font-extrabold tabular-nums text-indigo-950 dark:text-indigo-50 leading-none tracking-tight">
                     ${totalCompanyDollar.toLocaleString()}
                   </span>
                 </div>
@@ -1529,14 +1561,14 @@ export function CommissionBreakdown() {
 
               {radiusDeductionTotal > 0 && (
                 <>
-                  <Separator orientation="vertical" className="h-8 w-px bg-slate-300 mx-2" />
-                  <div className="flex items-center gap-2.5 px-3 py-1 rounded-md transition-colors hover:bg-white/60 group/item">
-                    <div className="size-7 rounded-full bg-slate-50 flex items-center justify-center text-slate-600 transition-transform group-hover/item:scale-110">
-                      <ShieldCheck className="size-3.5" />
+                  <Separator orientation="vertical" className="h-10 w-px bg-slate-200/60" />
+                  <div className="flex items-center gap-4 px-4 py-2 rounded-xl transition-all hover:bg-slate-50/50 group/item">
+                    <div className="size-10 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-600 transition-all group-hover/item:scale-105 group-hover/item:rotate-3 shadow-sm border border-slate-200/50">
+                      <ShieldCheck className="size-5" />
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-[9px] font-bold uppercase tracking-wider text-slate-600/60 leading-none mb-0.5">Radius Fee</span>
-                      <span className="text-[12px] font-bold tabular-nums text-slate-900 dark:text-slate-100 leading-none">
+                      <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-600/70 leading-none mb-1.5">Radius Fee</span>
+                      <span className="text-[16px] font-extrabold tabular-nums text-slate-950 dark:text-slate-50 leading-none tracking-tight">
                         ${radiusDeductionTotal.toLocaleString()}
                       </span>
                     </div>
@@ -1547,6 +1579,7 @@ export function CommissionBreakdown() {
           )}
         </div>
       </div>
+
 
       {/* Body */}
       <div className="flex-1 flex overflow-hidden">
