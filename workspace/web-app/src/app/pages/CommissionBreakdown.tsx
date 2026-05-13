@@ -5,8 +5,12 @@ import {
   ChevronRight,
   HelpCircle,
   Info,
+  Pencil,
   Plus,
+  Sliders,
   Trash2,
+  TrendingUp,
+  User,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -631,23 +635,29 @@ export function CommissionBreakdown() {
                       <h2 className="text-sm font-semibold">{activeSide.title}</h2>
                       <p className="text-xs text-muted-foreground">{activeSide.subline}</p>
                     </div>
-                    <Badge variant="outline" className="shrink-0 rounded-full text-xs">{activeSide.agents.length} assigned</Badge>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <Button variant="outline" size="sm" className="h-7 gap-1.5 rounded-lg px-3 text-xs" style={{ color: "#5A5FF2", borderColor: "#5A5FF2" }}>
+                        <Pencil className="size-3" />Edit
+                      </Button>
+                      <Button variant="outline" size="sm" className="h-7 gap-1.5 rounded-lg px-3 text-xs" style={{ color: "#5A5FF2", borderColor: "#5A5FF2" }} onClick={() => setShowAwardDialog(true)}>
+                        <Sliders className="size-3" />Award allocation
+                      </Button>
+                    </div>
                   </div>
                   <div className="mt-3 grid grid-cols-3 gap-2">
                     {[
-                      { label: "Gross", value: currency(activeSide.gross) },
-                      { label: "Agent", value: currency(totalAgentPayout) },
-                      { label: "Office", value: currency(activeSideOfficeShare) },
-                    ].map(({ label, value }) => (
-                      <div key={label} className="rounded-lg border bg-muted/30 px-3 py-2.5">
-                        <p className="text-xs font-medium text-muted-foreground">{label}</p>
-                        <p className="mt-0.5 text-sm font-bold tracking-tight">{value}</p>
+                      { label: "Gross", value: currency(activeSide.gross), icon: TrendingUp, gradient: "linear-gradient(135deg, #c7d2fe, #a5b4fc)", muted: "#6366f1", strong: "#1e1b4b" },
+                      { label: "Agent", value: currency(totalAgentPayout), icon: User, gradient: "linear-gradient(135deg, #bbf7d0, #86efac)", muted: "#16a34a", strong: "#14532d" },
+                      { label: "Office", value: currency(activeSideOfficeShare), icon: Building2, gradient: "linear-gradient(135deg, #fef3c7, #fde68a)", muted: "#d97706", strong: "#451a03" },
+                    ].map(({ label, value, icon: Icon, gradient, muted, strong }) => (
+                      <div key={label} className="rounded-lg px-3 py-2.5" style={{ background: gradient }}>
+                        <div className="flex items-center gap-1.5">
+                          <Icon className="size-3" style={{ color: muted }} />
+                          <p className="text-xs font-medium" style={{ color: muted }}>{label}</p>
+                        </div>
+                        <p className="mt-0.5 text-sm font-bold tracking-tight" style={{ color: strong }}>{value}</p>
                       </div>
                     ))}
-                  </div>
-                  <div className="mt-3 flex items-center gap-2">
-                    <Button variant="outline" size="sm" className="h-7 rounded-lg px-3 text-xs">Edit</Button>
-                    <Button variant="outline" size="sm" className="h-7 rounded-lg px-3 text-xs" onClick={() => setShowAwardDialog(true)}>Award allocation</Button>
                   </div>
                 </div>
 
@@ -809,7 +819,7 @@ export function CommissionBreakdown() {
             {sidesData.map((side) => (
               <div key={side.id} className="flex items-center justify-between gap-4">
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold uppercase tracking-wider">{side.title}</p>
+                  <p className="text-sm font-semibold">{side.title}</p>
                   <p className="text-xs text-muted-foreground">{side.subline}</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
