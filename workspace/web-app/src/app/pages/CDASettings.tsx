@@ -1194,6 +1194,7 @@ function AssignDefaultsDialog({
   const lockedFee = source.from === "fee" ? fees.find((f) => f.id === source.feeId) : null;
   const lockedAgentId = source.from === "agent" ? source.agentId : undefined;
   const lockedAgent = lockedAgentId ? agents.find((a) => a.id === lockedAgentId) : null;
+  const editMode = (source.from === "plan" || source.from === "fee") && form.selectedAgentIds.length > 0;
 
   const showPlanSelect = source.from !== "plan" && source.from !== "fee";
   const showFeeSelect = source.from !== "fee" && source.from !== "plan";
@@ -1220,9 +1221,13 @@ function AssignDefaultsDialog({
         <DialogHeader className="border-b px-6 pt-6 pb-4 !text-left">
           <div className="flex items-start justify-between">
             <div>
-              <DialogTitle className="text-base font-semibold leading-5">Assign Defaults</DialogTitle>
+              <DialogTitle className="text-base font-semibold leading-5">
+                {editMode ? "Edit Defaults" : "Assign Defaults"}
+              </DialogTitle>
               <DialogDescription className="mt-1 text-xs text-muted-foreground">
-                Set default commission plans and fees for your agents.
+                {editMode
+                  ? "Update agent defaults for this commission plan or fee type."
+                  : "Set default commission plans and fees for your agents."}
               </DialogDescription>
             </div>
             <button
@@ -1360,7 +1365,7 @@ function AssignDefaultsDialog({
         <DialogFooter className="!flex !flex-row !items-center !justify-end !gap-3 shrink-0 border-t bg-background px-6 py-4">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isAssigning}>Cancel</Button>
           <Button onClick={onSave} disabled={!isValid || isAssigning}>
-            {isAssigning ? "Assigning…" : "Assign Defaults"}
+            {isAssigning ? "Saving…" : editMode ? "Update Defaults" : "Assign Defaults"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1641,6 +1646,52 @@ export function CDASettings() {
     }));
   }
 
+  function getPlanAssignedAgentIds(planId: string) {
+    return state.defaultAssignments.filter((assignment) => assignment.planId === planId).map((assignment) => assignment.agentId);
+  }
+
+  function getFeeAssignedAgentIds(feeId: string) {
+    return state.defaultAssignments.filter((assignment) => assignment.feeIds.includes(feeId)).map((assignment) => assignment.agentId);
+  }
+
+  function openPlanDefaults(plan: CommissionPlan, mode: "assign" | "edit") {
+    const selectedAgentIds = mode === "edit" ? getPlanAssignedAgentIds(plan.id) : [];
+    setState((current) => ({
+      ...current,
+      activeDialog: "assign-defaults",
+      assignDefaultsSource: { from: "plan", planId: plan.id },
+      assignDefaultsForm: {
+        ...getFreshAssignDefaultsForm(),
+        planId: plan.id,
+        selectedAgentIds,
+        applyToActiveDeals: selectedAgentIds.some((agentId) => {
+          const assignment = current.defaultAssignments.find((item) => item.agentId === agentId);
+          return assignment?.applyToActiveDeals ?? false;
+        }),
+      },
+      assignDefaultsErrors: {},
+    }));
+  }
+
+  function openFeeDefaults(fee: FeeRecord, mode: "assign" | "edit") {
+    const selectedAgentIds = mode === "edit" ? getFeeAssignedAgentIds(fee.id) : [];
+    setState((current) => ({
+      ...current,
+      activeDialog: "assign-defaults",
+      assignDefaultsSource: { from: "fee", feeId: fee.id },
+      assignDefaultsForm: {
+        ...getFreshAssignDefaultsForm(),
+        feeIds: [fee.id],
+        selectedAgentIds,
+        applyToActiveDeals: selectedAgentIds.some((agentId) => {
+          const assignment = current.defaultAssignments.find((item) => item.agentId === agentId);
+          return assignment?.applyToActiveDeals ?? false;
+        }),
+      },
+      assignDefaultsErrors: {},
+    }));
+  }
+
   function handleSaveAssignDefaults() {
     const source = state.assignDefaultsSource;
     const form = state.assignDefaultsForm;
@@ -1666,25 +1717,76 @@ export function CDASettings() {
         ? [source.agentId]
         : form.selectedAgentIds;
 
-    const newAssignments: AgentAssignment[] = targetAgentIds.map((agentId) => ({
-      id: crypto.randomUUID(),
-      agentId,
-      planId: effectivePlanId,
-      feeIds: effectiveFeeIds,
-      applyToActiveDeals: form.applyToActiveDeals,
-    }));
+    setState((current) => {
+      let nextAssignments = current.defaultAssignments;
 
-    setState((current) => ({
-      ...current,
-      defaultAssignments: [
-        ...current.defaultAssignments.filter((a) => !targetAgentIds.includes(a.agentId)),
-        ...newAssignments,
-      ],
-      activeDialog: null,
-      assignDefaultsForm: getFreshAssignDefaultsForm(),
-      assignDefaultsErrors: {},
-      assignDefaultsSource: { from: "bulk" },
-    }));
+      if (source.from === "plan") {
+        const targetSet = new Set(targetAgentIds);
+        nextAssignments = [
+          ...current.defaultAssignments.filter((assignment) => assignment.planId !== source.planId && !targetSet.has(assignment.agentId)),
+          ...targetAgentIds.map((agentId) => {
+            const existing = current.defaultAssignments.find((assignment) => assignment.agentId === agentId);
+            return {
+              id: existing?.id ?? crypto.randomUUID(),
+              agentId,
+              planId: source.planId,
+              feeIds: existing?.feeIds ?? [],
+              applyToActiveDeals: form.applyToActiveDeals,
+            };
+          }),
+        ];
+      } else if (source.from === "fee") {
+        const targetSet = new Set(targetAgentIds);
+        const updated = current.defaultAssignments
+          .map((assignment) => {
+            const selected = targetSet.has(assignment.agentId);
+            const nextFeeIds = selected
+              ? Array.from(new Set([...assignment.feeIds, source.feeId]))
+              : assignment.feeIds.filter((id) => id !== source.feeId);
+            return {
+              ...assignment,
+              feeIds: nextFeeIds,
+              applyToActiveDeals: selected ? form.applyToActiveDeals : assignment.applyToActiveDeals,
+            };
+          })
+          .filter((assignment) => assignment.planId !== null || assignment.feeIds.length > 0);
+
+        const existingAgentIds = new Set(updated.map((assignment) => assignment.agentId));
+        const additions = targetAgentIds
+          .filter((agentId) => !existingAgentIds.has(agentId))
+          .map((agentId) => ({
+            id: crypto.randomUUID(),
+            agentId,
+            planId: null,
+            feeIds: [source.feeId],
+            applyToActiveDeals: form.applyToActiveDeals,
+          }));
+
+        nextAssignments = [...updated, ...additions];
+      } else {
+        const newAssignments: AgentAssignment[] = targetAgentIds.map((agentId) => ({
+          id: crypto.randomUUID(),
+          agentId,
+          planId: effectivePlanId,
+          feeIds: effectiveFeeIds,
+          applyToActiveDeals: form.applyToActiveDeals,
+        }));
+
+        nextAssignments = [
+          ...current.defaultAssignments.filter((a) => !targetAgentIds.includes(a.agentId)),
+          ...newAssignments,
+        ];
+      }
+
+      return {
+        ...current,
+        defaultAssignments: nextAssignments,
+        activeDialog: null,
+        assignDefaultsForm: getFreshAssignDefaultsForm(),
+        assignDefaultsErrors: {},
+        assignDefaultsSource: { from: "bulk" },
+      };
+    });
     toast("Defaults assigned");
   }
 
@@ -1904,26 +2006,6 @@ export function CDASettings() {
     }));
   }
 
-  function assignDefaults(plan: CommissionPlan) {
-    setState((current) => ({
-      ...current,
-      activeDialog: "assign-defaults",
-      assignDefaultsSource: { from: "plan", planId: plan.id },
-      assignDefaultsForm: { ...getFreshAssignDefaultsForm(), planId: plan.id },
-      assignDefaultsErrors: {},
-    }));
-  }
-
-  function assignFromFee(fee: FeeRecord) {
-    setState((current) => ({
-      ...current,
-      activeDialog: "assign-defaults",
-      assignDefaultsSource: { from: "fee", feeId: fee.id },
-      assignDefaultsForm: { ...getFreshAssignDefaultsForm(), feeIds: [fee.id] },
-      assignDefaultsErrors: {},
-    }));
-  }
-
   function archivePlan(plan: CommissionPlan) {
     setState((current) => ({
       ...current,
@@ -2039,8 +2121,9 @@ export function CDASettings() {
             </TableHeader>
             <TableBody>
               {state.plans.map((plan) => {
-                const assignedAgentIds = state.defaultAssignments.filter(a => a.planId === plan.id).map(a => a.agentId);
+                const assignedAgentIds = getPlanAssignedAgentIds(plan.id);
                 const assignedAgents = agents.filter(a => assignedAgentIds.includes(a.id));
+                const hasAssignedAgents = assignedAgents.length > 0;
 
                 return (
                   <TableRow key={plan.id} className="group h-12 hover:bg-muted/30 transition-colors border-b last:border-0">
@@ -2051,16 +2134,15 @@ export function CDASettings() {
                       <PlanTypeBadge type={plan.type} />
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-2">
-                        <AgentAvatarStack 
-                          agents={assignedAgents.map(a => ({ name: a.name, avatarUrl: a.avatarUrl }))} 
-                          max={5} 
-                          size="sm"
-                        />
-                        {assignedAgents.length === 0 && (
-                          <span className="text-xs text-muted-foreground italic">None</span>
-                        )}
-                      </div>
+                      <AgentAvatarStack
+                        agents={assignedAgents.map((a) => ({ id: a.id, name: a.name, avatarUrl: a.avatarUrl }))}
+                        max={5}
+                        size="sm"
+                        emptyActionLabel="Assign"
+                        onEmptyAction={() => openPlanDefaults(plan, "assign")}
+                        onEditDefaults={() => openPlanDefaults(plan, "edit")}
+                        onUnassignDefaults={() => openPlanDefaults(plan, "edit")}
+                      />
                     </TableCell>
                     <TableCell className="pr-6 text-right">
                       <DropdownMenu>
@@ -2075,9 +2157,9 @@ export function CDASettings() {
                               <Edit3 className="size-4" />
                               Edit
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => assignDefaults(plan)}>
+                            <DropdownMenuItem onClick={() => openPlanDefaults(plan, hasAssignedAgents ? "edit" : "assign")}>
                               <UserCheck className="size-4" />
-                              Assign
+                              {hasAssignedAgents ? "Edit Defaults" : "Assign"}
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => duplicatePlan(plan)}>
                               <Copy className="size-4" />
@@ -2201,77 +2283,89 @@ export function CDASettings() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {state.fees.map((fee) => (
-                <TableRow key={fee.id} className="group h-12 hover:bg-muted/30 transition-colors border-b last:border-0">
-                  <TableCell className="pl-6 font-medium text-sm text-foreground">
-                    {fee.name}
-                  </TableCell>
-                  <TableCell>
-                    <Badge 
-                      variant="secondary" 
-                      className={cn(
-                        "px-2 py-0 h-4.5 text-[10px] font-semibold border-transparent",
-                        fee.type === "flat" ? "bg-indigo-50 text-indigo-700" : "bg-emerald-50 text-emerald-700"
-                      )}
-                    >
-                      {fee.type === "flat" ? "Flat" : "Percentage"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <span className={cn(
-                      "text-xs font-semibold",
-                      fee.timing === "pre-split" ? "text-blue-600" : "text-amber-600"
-                    )}>
-                      {fee.timing === "pre-split" ? "Pre-Split" : "Post-Split"}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    {fee.appliesToMode === "team" ? (
-                      <Badge variant="outline" className="text-[10px] h-4 px-1.5 font-medium border-primary/20 text-primary bg-primary/5">
-                        Team
+              {state.fees.map((fee) => {
+                const assignedAgentIds = getFeeAssignedAgentIds(fee.id);
+                const assignedAgents = agents.filter((agent) => assignedAgentIds.includes(agent.id));
+                const hasAssignedAgents = assignedAgents.length > 0;
+
+                return (
+                  <TableRow key={fee.id} className="group h-12 hover:bg-muted/30 transition-colors border-b last:border-0">
+                    <TableCell className="pl-6 font-medium text-sm text-foreground">
+                      {fee.name}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="secondary"
+                        className={cn(
+                          "px-2 py-0 h-4.5 text-[10px] font-semibold border-transparent",
+                          fee.type === "flat" ? "bg-indigo-50 text-indigo-700" : "bg-emerald-50 text-emerald-700",
+                        )}
+                      >
+                        {fee.type === "flat" ? "Flat" : "Percentage"}
                       </Badge>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <AgentAvatarStack 
-                          agents={agents.filter(a => fee.agentIds.includes(a.id)).map(a => ({ name: a.name, avatarUrl: a.avatarUrl }))} 
-                          max={3} 
+                    </TableCell>
+                    <TableCell>
+                      <span
+                        className={cn(
+                          "text-xs font-semibold",
+                          fee.timing === "pre-split" ? "text-blue-600" : "text-amber-600",
+                        )}
+                      >
+                        {fee.timing === "pre-split" ? "Pre-Split" : "Post-Split"}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      {fee.appliesToMode === "team" ? (
+                        <Badge variant="outline" className="text-[10px] h-4 px-1.5 font-medium border-primary/20 text-primary bg-primary/5">
+                          Team
+                        </Badge>
+                      ) : (
+                        <AgentAvatarStack
+                          agents={assignedAgents.map((agent) => ({ id: agent.id, name: agent.name, avatarUrl: agent.avatarUrl }))}
+                          max={5}
                           size="sm"
+                          emptyActionLabel="Assign"
+                          onEmptyAction={() => openFeeDefaults(fee, "assign")}
+                          onEditDefaults={() => openFeeDefaults(fee, "edit")}
+                          onUnassignDefaults={() => openFeeDefaults(fee, "edit")}
                         />
-                      </div>
-                    )}
-                  </TableCell>
-                  <TableCell className="pr-6 text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="size-8">
-                          <MoreVertical className="size-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" sideOffset={8} className="w-[170px]">
-                        <DropdownMenuGroup>
-                          <DropdownMenuItem onClick={() => editFee(fee)}>
-                            <Edit3 className="size-4" />
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => assignFromFee(fee)}>
-                            <UserCheck className="size-4" />
-                            Assign
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => duplicateFee(fee)}>
-                            <Copy className="size-4" />
-                            Duplicate
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem variant="destructive" onClick={() => setState((current) => ({ ...current, archiveTarget: { type: "fee", id: fee.id, name: fee.name } }))}>
-                            <Archive className="size-4" />
-                            Archive
-                          </DropdownMenuItem>
-                        </DropdownMenuGroup>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))}
+                      )}
+                    </TableCell>
+                    <TableCell className="pr-6 text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="size-8">
+                            <MoreVertical className="size-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" sideOffset={8} className="w-[170px]">
+                          <DropdownMenuGroup>
+                            <DropdownMenuItem onClick={() => editFee(fee)}>
+                              <Edit3 className="size-4" />
+                              Edit
+                            </DropdownMenuItem>
+                            {fee.appliesToMode !== "team" && (
+                              <DropdownMenuItem onClick={() => openFeeDefaults(fee, hasAssignedAgents ? "edit" : "assign")}>
+                                <UserCheck className="size-4" />
+                                {hasAssignedAgents ? "Edit Defaults" : "Assign"}
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem onClick={() => duplicateFee(fee)}>
+                              <Copy className="size-4" />
+                              Duplicate
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem variant="destructive" onClick={() => setState((current) => ({ ...current, archiveTarget: { type: "fee", id: fee.id, name: fee.name } }))}>
+                              <Archive className="size-4" />
+                              Archive
+                            </DropdownMenuItem>
+                          </DropdownMenuGroup>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </Card>
