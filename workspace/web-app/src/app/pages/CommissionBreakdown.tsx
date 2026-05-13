@@ -4,7 +4,6 @@ import {
   Building2,
   CheckCircle2,
   ChevronLeft,
-  ChevronRight,
   Circle,
   Clock,
   DollarSign,
@@ -21,15 +20,18 @@ import {
   Calculator,
   UserPlus,
   Percent,
-  ChevronDown,
-  ChevronUp,
   RotateCcw,
   Lock,
   CheckCheck,
   Printer,
   RefreshCw,
   Flag,
+  ChevronDown,
+  ChevronUp,
+  BarChart3,
+  ShieldCheck,
 } from "lucide-react";
+import { CDAFlowSwitcher } from "../components/finance/cda-flow-switcher";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Separator } from "../components/ui/separator";
@@ -92,11 +94,16 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "../components/ui/accordion";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "../components/ui/collapsible";
 import { Textarea } from "../components/ui/textarea";
-
 import { CDASectionHeader } from "../components/finance/cda-section-header";
 
-// --- Types ---
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 type Status =
   | "draft"
   | "pending_tl"
@@ -164,7 +171,8 @@ interface Note {
   resolved?: boolean;
 }
 
-// --- Mock Data ---
+// ─── Mock Data ────────────────────────────────────────────────────────────────
+
 const INITIAL_DATA: TransactionData = {
   title: "123 Serenity Lane",
   client: "John & Sarah Miller",
@@ -175,6 +183,7 @@ const INITIAL_DATA: TransactionData = {
   globalDeductions: [
     { id: "d1", label: "Brokerage Fee", amount: 250, type: "pre_split" },
     { id: "d2", label: "Compliance Review", amount: 150, type: "pre_split" },
+    { id: "d3", label: "Radius Platform Fee", amount: 500, type: "radius_fee" },
   ],
   sides: [
     {
@@ -191,6 +200,7 @@ const INITIAL_DATA: TransactionData = {
           planName: "80/20 Standard",
           planSplit: 0.8,
           deductions: [
+            { id: "ad0", label: "Referral Fee", amount: 60, type: "referral" },
             { id: "ad1", label: "Marketing Fee", amount: 125, type: "post_split" },
           ],
         },
@@ -259,7 +269,120 @@ const INITIAL_NOTES: Note[] = [
   },
 ];
 
-// --- Helpers ---
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+interface AgentCalcs {
+  agentBasis: number;
+  preSplitDeds: Deduction[];
+  preSplitTotal: number;
+  adjustedBasis: number;
+  postSplitCommission: number;
+  postSplitDeds: Deduction[];
+  postSplitTotal: number;
+  netAgentCommission: number;
+  companyDollar: number;
+}
+
+function calcAgentFinancials(agent: AgentAllocation, sideAmount: number): AgentCalcs {
+  const agentBasis = sideAmount * (agent.allocationPct / 100);
+  
+  // pre-split: referral, credit, and pre_split deductions reduce basis before the plan split
+  const preSplitDeds = agent.deductions.filter(
+    (d) => d.type === "referral" || d.type === "credit" || d.type === "pre_split"
+  );
+  const preSplitTotal = preSplitDeds.reduce((s, d) => s + d.amount, 0);
+  const adjustedBasis = Math.max(0, agentBasis - preSplitTotal);
+  
+  const postSplitCommission = adjustedBasis * agent.planSplit;
+  
+  // post-split: marketing fees, platform fees, and other direct agent charges
+  const postSplitDeds = agent.deductions.filter(
+    (d) => d.type === "post_split" || d.type === "radius_fee"
+  );
+  const postSplitTotal = postSplitDeds.reduce((s, d) => s + d.amount, 0);
+  
+  const netAgentCommission = Math.max(0, postSplitCommission - postSplitTotal);
+  const companyDollar = adjustedBasis - postSplitCommission;
+  return {
+    agentBasis,
+    preSplitDeds,
+    preSplitTotal,
+    adjustedBasis,
+    postSplitCommission,
+    postSplitDeds,
+    postSplitTotal,
+    netAgentCommission,
+    companyDollar,
+  };
+}
+
+// Compact financial row for accordion / summary tables
+function FinRow({
+  label,
+  value,
+  indent = false,
+  variant = "default",
+  tooltip,
+}: {
+  label: string;
+  value?: number;
+  indent?: boolean;
+  variant?: "default" | "subtotal" | "muted" | "total";
+  tooltip?: string;
+}) {
+  const isNeg = value !== undefined && value < 0;
+  const row = (
+    <div
+      className={cn(
+        "flex items-center justify-between py-1.5",
+        indent ? "pl-8 pr-4" : "px-4",
+        variant === "subtotal" && "bg-muted/30",
+        variant === "total" && "bg-muted/50"
+      )}
+    >
+      <span
+        className={cn(
+          "text-[12px]",
+          (variant === "subtotal" || variant === "total") && "font-semibold",
+          variant === "muted" && "text-muted-foreground"
+        )}
+      >
+        {label}
+        {tooltip && (
+          <Info className="inline size-3 ml-1 text-muted-foreground/40 align-[-1px]" />
+        )}
+      </span>
+      {value !== undefined && (
+        <span
+          className={cn(
+            "text-[12px] tabular-nums font-medium",
+            (variant === "subtotal" || variant === "total") && "font-semibold",
+            isNeg && "text-destructive/80"
+          )}
+        >
+          {isNeg
+            ? `-$${Math.abs(value).toLocaleString()}`
+            : `$${value.toLocaleString()}`}
+        </span>
+      )}
+    </div>
+  );
+
+  if (tooltip) {
+    return (
+      <TooltipProvider delayDuration={0}>
+        <Tooltip>
+          <TooltipTrigger asChild>{row}</TooltipTrigger>
+          <TooltipContent side="left">
+            <p className="text-[11px]">{tooltip}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+  return row;
+}
+
 function SpreadsheetRow({
   label,
   value,
@@ -288,7 +411,7 @@ function SpreadsheetRow({
         variant === "header" && "bg-muted/20 py-1.5",
         variant === "total" &&
           "bg-primary/[0.02] border-t border-b border-border/50 font-semibold",
-        variant === "danger" && "text-red-600",
+        variant === "danger" && "text-destructive/80",
         changed && "bg-accent/40 border-l-2 border-primary",
         className
       )}
@@ -380,77 +503,6 @@ function StatusBadge({ status }: { status: Status }) {
   );
 }
 
-function AuditTimeline({ events }: { events: AuditEvent[] }) {
-  const typeLabel: Record<AuditEvent["type"], string> = {
-    action: "performed",
-    approval: "approved",
-    rejection: "requested changes on",
-    system: "system:",
-  };
-
-  const typeBadge: Record<AuditEvent["type"], React.ReactNode | null> = {
-    action: null,
-    approval: (
-      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-emerald-100 text-emerald-700">
-        <CheckCircle2 className="size-2.5" /> Approved
-      </span>
-    ),
-    rejection: (
-      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-orange-100 text-orange-700">
-        <Flag className="size-2.5" /> Changes requested
-      </span>
-    ),
-    system: (
-      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-blue-50 text-blue-600">
-        <Info className="size-2.5" /> System
-      </span>
-    ),
-  };
-
-  return (
-    <div className="space-y-0 -mx-2">
-      <div className="px-2 pb-2">
-        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Today</p>
-      </div>
-      {events.map((event) => (
-        <div
-          key={event.id}
-          className="flex items-start gap-3 px-2 py-2.5 rounded-md hover:bg-muted/40 transition-colors group"
-        >
-          {/* Avatar */}
-          <div className="size-7 rounded-full bg-muted flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5 border border-border/50">
-            {event.initials}
-          </div>
-
-          {/* Content */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex-1 min-w-0">
-                <p className="text-[12px] leading-snug">
-                  <span className="font-semibold">{event.actor}</span>
-                  <span className="text-muted-foreground"> · {event.actorRole} · </span>
-                  <span>{event.event}</span>
-                  {typeBadge[event.type] && (
-                    <span className="ml-1.5 inline-flex">{typeBadge[event.type]}</span>
-                  )}
-                </p>
-                {event.description && (
-                  <p className="text-[11px] text-muted-foreground mt-1 leading-snug bg-muted/50 rounded px-2 py-1.5">
-                    {event.description}
-                  </p>
-                )}
-              </div>
-              <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0 mt-0.5">
-                {event.time}
-              </span>
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function NoteTypeBadge({ type }: { type: Note["type"] }) {
   if (type === "general") return null;
   const map: Record<string, string> = {
@@ -475,12 +527,76 @@ function NoteTypeBadge({ type }: { type: Note["type"] }) {
   );
 }
 
-// --- Main Component ---
+function AuditTimeline({ events }: { events: AuditEvent[] }) {
+  const typeBadge: Record<AuditEvent["type"], React.ReactNode | null> = {
+    action: null,
+    approval: (
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-emerald-100 text-emerald-700">
+        <CheckCircle2 className="size-2.5" /> Approved
+      </span>
+    ),
+    rejection: (
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-orange-100 text-orange-700">
+        <Flag className="size-2.5" /> Changes requested
+      </span>
+    ),
+    system: (
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-blue-50 text-blue-600">
+        <Info className="size-2.5" /> System
+      </span>
+    ),
+  };
+
+  return (
+    <div className="space-y-0 -mx-2">
+      <div className="px-2 pb-1.5">
+        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
+          Today
+        </p>
+      </div>
+      {events.map((event) => (
+        <div
+          key={event.id}
+          className="flex items-start gap-2.5 px-2 py-2 rounded-md hover:bg-muted/40 transition-colors"
+        >
+          <div className="size-6 rounded-full bg-muted flex items-center justify-center text-[9px] font-bold shrink-0 mt-0.5 border border-border/50">
+            {event.initials}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-[11px] leading-snug flex-1">
+                <span className="font-semibold">{event.actor}</span>
+                <span className="text-muted-foreground"> · </span>
+                <span className="text-muted-foreground">{event.actorRole}</span>
+                <span className="text-muted-foreground"> · </span>
+                <span>{event.event}</span>
+                {typeBadge[event.type] && (
+                  <span className="ml-1.5 inline-flex">{typeBadge[event.type]}</span>
+                )}
+              </p>
+              <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
+                {event.time}
+              </span>
+            </div>
+            {event.description && (
+              <p className="text-[10px] text-muted-foreground mt-1 leading-snug bg-muted/50 rounded px-2 py-1">
+                {event.description}
+              </p>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+
 export function CommissionBreakdown() {
   const navigate = useNavigate();
   const [data, setData] = useState<TransactionData>(INITIAL_DATA);
   const [status, setStatus] = useState<Status>("draft");
-  const [role, setRole] = useState<Role>("agent");
+  const [role, setRole] = useState<Role>("radius");
   const [selectedNode, setSelectedNode] = useState<string>("root");
   const [showBackDialog, setShowBackDialog] = useState(false);
   const [showAuditLog, setShowAuditLog] = useState(false);
@@ -490,8 +606,6 @@ export function CommissionBreakdown() {
   const [newNoteText, setNewNoteText] = useState("");
   const [changeRequestText, setChangeRequestText] = useState("");
   const [showChangeRequestDialog, setShowChangeRequestDialog] = useState(false);
-
-  // Dialog States
   const [isDeductionOpen, setIsDeductionOpen] = useState(false);
   const [isAgentOpen, setIsAgentOpen] = useState(false);
   const [isAllocationOpen, setIsAllocationOpen] = useState(false);
@@ -504,41 +618,37 @@ export function CommissionBreakdown() {
       (status === "pending_tl" && (role === "team_lead" || role === "radius")) ||
       role === "radius");
 
-  // --- Calculations ---
+  // ─── Calculations ────────────────────────────────────────────────────────────
   const gciTotal = data.purchasePrice * (data.commissionRate / 100);
-  const globalDeductionTotal = data.globalDeductions.reduce((sum, d) => sum + d.amount, 0);
-  const grossAfterDeductions = gciTotal - globalDeductionTotal;
 
-  const netPayable = data.sides.reduce((sideSum, side) => {
+  // Shared deductions: visible to all. Radius fee: hidden from agent.
+  const sharedDeductions = data.globalDeductions.filter((d) => d.type !== "radius_fee");
+  const radiusDeductions = data.globalDeductions.filter((d) => d.type === "radius_fee");
+  const sharedDeductionTotal = sharedDeductions.reduce((s, d) => s + d.amount, 0);
+  const radiusDeductionTotal = radiusDeductions.reduce((s, d) => s + d.amount, 0);
+
+  // Split basis is same for all roles (radius fee does NOT affect split basis)
+  const grossAfterDeductions = gciTotal - sharedDeductionTotal;
+
+  // Flat list of all agents with their side context and calcs
+  const allAgentCalcs = data.sides.flatMap((side) => {
     const sideAmount = grossAfterDeductions * (side.percentage / 100);
-    return (
-      sideSum +
-      side.agents.reduce((agentSum, agent) => {
-        const agentBasis = sideAmount * (agent.allocationPct / 100);
-        const afterSplit = agentBasis * agent.planSplit;
-        const agentDeds = agent.deductions.reduce((s, d) => s + d.amount, 0);
-        return agentSum + (afterSplit - agentDeds);
-      }, 0)
-    );
-  }, 0);
+    return side.agents.map((agent) => ({
+      agent,
+      side,
+      sideAmount,
+      calcs: calcAgentFinancials(agent, sideAmount),
+    }));
+  });
 
-  const teamPortionTotal = data.sides.reduce((sideSum, side) => {
-    const sideAmount = grossAfterDeductions * (side.percentage / 100);
-    return (
-      sideSum +
-      side.agents.reduce((agentSum, agent) => {
-        const agentBasis = sideAmount * (agent.allocationPct / 100);
-        return agentSum + agentBasis * (1 - agent.planSplit);
-      }, 0)
-    );
-  }, 0);
+  const netPayable = allAgentCalcs.reduce((s, { calcs }) => s + calcs.netAgentCommission, 0);
+  const totalCompanyDollar = allAgentCalcs.reduce((s, { calcs }) => s + calcs.companyDollar, 0);
+  const companyNet = totalCompanyDollar - radiusDeductionTotal;
 
-  // --- Workflow Actions ---
+  // ─── Workflow Actions ─────────────────────────────────────────────────────────
+
   const addAuditEvent = (event: Omit<AuditEvent, "id">) => {
-    setAuditEvents((prev) => [
-      ...prev,
-      { ...event, id: `e${Date.now()}` },
-    ]);
+    setAuditEvents((prev) => [...prev, { ...event, id: `e${Date.now()}` }]);
   };
 
   const handleSendForTLReview = () => {
@@ -583,11 +693,10 @@ export function CommissionBreakdown() {
   const handleTLRequestChanges = () => {
     if (!changeRequestText.trim()) return;
     setStatus("revision_requested");
-    const noteId = `n${Date.now()}`;
     setNotes((prev) => [
       ...prev,
       {
-        id: noteId,
+        id: `n${Date.now()}`,
         author: "Rod Watson",
         authorRole: "Team Lead",
         initials: "RW",
@@ -668,7 +777,8 @@ export function CommissionBreakdown() {
       ...prev,
       {
         id: `n${Date.now()}`,
-        author: role === "agent" ? "Ila Corcoran" : role === "team_lead" ? "Rod Watson" : "Admin",
+        author:
+          role === "agent" ? "Ila Corcoran" : role === "team_lead" ? "Rod Watson" : "Admin",
         authorRole: roleLabels[role],
         initials: role === "agent" ? "IC" : role === "team_lead" ? "RW" : "RA",
         text: newNoteText,
@@ -679,138 +789,12 @@ export function CommissionBreakdown() {
     setNewNoteText("");
   };
 
-  // --- Approval Progress ---
-  const approvalSteps: {
-    label: string;
-    status: "complete" | "active" | "pending";
-    time?: string;
-  }[] = [
-    {
-      label: "Agent Entry",
-      status:
-        status === "draft" || status === "revision_requested" ? "active" : "complete",
-      time:
-        status !== "draft" || status === "revision_requested" ? "Today, 9:15 AM" : undefined,
-    },
-    {
-      label: "TL Review",
-      status:
-        status === "pending_tl"
-          ? "active"
-          : status === "draft" || status === "revision_requested"
-          ? "pending"
-          : "complete",
-      time: status === "pending_agent_confirmation" || status === "finalized" ? "Today, 11:35 AM" : undefined,
-    },
-    {
-      label: "Agent Confirmation",
-      status:
-        status === "pending_agent_confirmation"
-          ? "active"
-          : status === "finalized"
-          ? "complete"
-          : "pending",
-    },
-    {
-      label: "Finalized",
-      status: status === "finalized" ? "complete" : "pending",
-    },
-  ];
+  // ─── Workflow Banner ──────────────────────────────────────────────────────────
 
-  // --- Render Agent Row ---
-  const renderAgentRow = (agent: AgentAllocation, sideAmount: number) => {
-    const agentBasis = sideAmount * (agent.allocationPct / 100);
-    const agentNet =
-      agentBasis * agent.planSplit -
-      agent.deductions.reduce((s, d) => s + d.amount, 0);
-    const isSelected = selectedNode === `agent-${agent.id}`;
-
-    return (
-      <div
-        key={agent.id}
-        onClick={() => setSelectedNode(`agent-${agent.id}`)}
-        className={cn(
-          "group flex items-center justify-between py-2.5 px-3 cursor-pointer transition-colors border-l-2 border-transparent",
-          isSelected ? "bg-primary/5 border-primary" : "hover:bg-muted/30"
-        )}
-      >
-        <div className="flex items-center gap-3 min-w-0">
-          <Avatar className="size-8">
-            <AvatarImage src={agent.avatar} />
-            <AvatarFallback className="text-[10px]">{agent.name.charAt(0)}</AvatarFallback>
-          </Avatar>
-          <div className="min-w-0">
-            <p className="text-[13px] font-medium truncate">{agent.name}</p>
-            <div className="flex items-center gap-2 mt-0.5">
-              <span className="text-[10px] text-muted-foreground">
-                {agent.allocationPct}% Allocation
-              </span>
-              <Badge
-                variant="secondary"
-                className="h-4 text-[9px] px-1 font-normal bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-400"
-              >
-                {agent.planName}
-              </Badge>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <div className="text-right">
-            <p className="text-[13px] font-bold tabular-nums">${agentNet.toLocaleString()}</p>
-            <p className="text-[10px] text-muted-foreground">Net Payout</p>
-          </div>
-          {!isLocked && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-7 opacity-0 group-hover:opacity-100"
-                >
-                  <MoreHorizontal className="size-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem onClick={() => setSelectedNode(`agent-${agent.id}`)}>
-                  <Calculator className="size-4 mr-2" /> View Breakdown
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => setIsDeductionOpen(true)}
-                  disabled={!isEditable}
-                >
-                  <Plus className="size-4 mr-2" /> Add Post-Split Deduction
-                </DropdownMenuItem>
-                {role !== "agent" && (
-                  <>
-                    <DropdownMenuItem
-                      onClick={() => setIsAgentOpen(true)}
-                      disabled={!isEditable}
-                    >
-                      <Edit className="size-4 mr-2" /> Change Plan
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem className="text-red-600" disabled={!isEditable}>
-                      <Trash2 className="size-4 mr-2" /> Remove Agent
-                    </DropdownMenuItem>
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  // --- Workflow Banner ---
   const renderWorkflowBanner = () => {
     if (status === "draft") return null;
     const configs: Partial<
-      Record<
-        Status,
-        { bg: string; icon: React.ReactNode; title: string; desc: string }
-      >
+      Record<Status, { bg: string; icon: React.ReactNode; title: string; desc: string }>
     > = {
       pending_tl: {
         bg: "bg-amber-50 border-amber-200",
@@ -840,7 +824,7 @@ export function CommissionBreakdown() {
     const c = configs[status];
     if (!c) return null;
     return (
-      <div className={cn("border-b px-6 py-3 flex items-center gap-3 shrink-0", c.bg)}>
+      <div className={cn("border-b px-6 py-2.5 flex items-center gap-3 shrink-0", c.bg)}>
         {c.icon}
         <div>
           <p className="text-[12px] font-semibold text-foreground">{c.title}</p>
@@ -860,7 +844,8 @@ export function CommissionBreakdown() {
     );
   };
 
-  // --- Footer CTA ---
+  // ─── Footer CTA ───────────────────────────────────────────────────────────────
+
   const renderFooterCTA = () => {
     switch (status) {
       case "draft":
@@ -884,7 +869,7 @@ export function CommissionBreakdown() {
               className="h-9 px-6 text-xs gap-2"
               onClick={handleSendForTLReview}
             >
-              <Send className="size-3.5" /> Send for TL Review
+              <Send className="size-3.5" /> Submit for Approval
             </Button>
           </div>
         );
@@ -892,9 +877,7 @@ export function CommissionBreakdown() {
       case "revision_requested":
         if (role !== "agent") {
           return (
-            <span className="text-[11px] text-muted-foreground">
-              Awaiting agent revision.
-            </span>
+            <span className="text-[11px] text-muted-foreground">Awaiting agent revision.</span>
           );
         }
         return (
@@ -902,12 +885,8 @@ export function CommissionBreakdown() {
             <Button variant="outline" size="sm" className="h-9 px-4 text-xs">
               Save Draft
             </Button>
-            <Button
-              size="sm"
-              className="h-9 px-6 text-xs gap-2"
-              onClick={handleResubmit}
-            >
-              <RotateCcw className="size-3.5" /> Resubmit for TL Review
+            <Button size="sm" className="h-9 px-6 text-xs gap-2" onClick={handleResubmit}>
+              <RotateCcw className="size-3.5" /> Resubmit for Review
             </Button>
           </div>
         );
@@ -935,7 +914,7 @@ export function CommissionBreakdown() {
               className="h-9 px-6 text-xs gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
               onClick={handleTLApprove}
             >
-              <CheckCircle2 className="size-3.5" /> Approve & Send to Agent
+              <CheckCircle2 className="size-3.5" /> Approve Breakdown
             </Button>
           </div>
         );
@@ -958,11 +937,7 @@ export function CommissionBreakdown() {
             >
               <RotateCcw className="size-3.5 mr-1.5" /> Request Correction
             </Button>
-            <Button
-              size="sm"
-              className="h-9 px-6 text-xs gap-2"
-              onClick={handleAgentConfirm}
-            >
+            <Button size="sm" className="h-9 px-6 text-xs gap-2" onClick={handleAgentConfirm}>
               <CheckCheck className="size-3.5" /> Confirm Breakdown
             </Button>
           </div>
@@ -992,7 +967,280 @@ export function CommissionBreakdown() {
     }
   };
 
-  // --- Finalized Left Panel ---
+  // ─── Agent Row (compact, in Allocation Sides section) ─────────────────────────
+
+  const renderAgentRow = (agent: AgentAllocation, sideAmount: number) => {
+    const calcs = calcAgentFinancials(agent, sideAmount);
+    const isSelected = selectedNode === `agent-${agent.id}`;
+    return (
+      <div
+        key={agent.id}
+        onClick={() => setSelectedNode(`agent-${agent.id}`)}
+        className={cn(
+          "group flex items-center justify-between py-2 px-4 cursor-pointer transition-colors border-l-2 border-transparent",
+          isSelected ? "bg-primary/5 border-primary" : "hover:bg-muted/30"
+        )}
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          <Avatar className="size-6 shrink-0">
+            <AvatarImage src={agent.avatar} />
+            <AvatarFallback className="text-[8px] font-bold">{agent.name.charAt(0)}</AvatarFallback>
+          </Avatar>
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold leading-none">{agent.name}</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5 font-medium uppercase tracking-tight">
+              {agent.allocationPct}% · {agent.planName}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="text-right">
+            <p className="text-[12px] font-bold tabular-nums">
+              ${calcs.netAgentCommission.toLocaleString()}
+            </p>
+          </div>
+          {!isLocked && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-5 opacity-0 group-hover:opacity-100"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <MoreHorizontal className="size-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onClick={() => setSelectedNode(`agent-${agent.id}`)}>
+                  <Calculator className="size-4 mr-2" /> View Inspector
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setIsDeductionOpen(true)}
+                  disabled={!isEditable}
+                >
+                  <Plus className="size-4 mr-2" /> Add Deduction
+                </DropdownMenuItem>
+                {role !== "agent" && (
+                  <>
+                    <DropdownMenuItem
+                      onClick={() => setIsAgentOpen(true)}
+                      disabled={!isEditable}
+                    >
+                      <Edit className="size-4 mr-2" /> Change Plan
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem className="text-destructive" disabled={!isEditable}>
+                      <Trash2 className="size-4 mr-2" /> Remove Agent
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // ─── Agent Breakdown Accordion Section ────────────────────────────────────────
+
+  const renderAgentBreakdown = () => {
+    if (allAgentCalcs.length === 0) return null;
+    return (
+      <div className="border rounded-lg bg-background overflow-hidden border-border/60">
+        <CDASectionHeader title="04. Agent Breakdown" className="bg-muted/20" />
+        <Accordion type="multiple" className="divide-y divide-border/50">
+          {allAgentCalcs.map(({ agent, side, sideAmount, calcs }) => (
+            <AccordionItem key={agent.id} value={agent.id} className="border-none">
+              <AccordionTrigger className="px-3.5 py-0 hover:no-underline hover:bg-muted/20 data-[state=open]:bg-muted/10 [&>svg]:shrink-0 [&>svg]:text-muted-foreground [&>svg]:size-4">
+                <div className="flex items-center gap-2.5 flex-1 py-2.5 min-w-0 text-left">
+                  <Avatar className="size-6 shrink-0">
+                    <AvatarImage src={agent.avatar} />
+                    <AvatarFallback className="text-[8px] font-bold">
+                      {agent.name.charAt(0)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] font-bold leading-tight">{agent.name}</p>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
+                         {side.type} side · {agent.allocationPct}% · {agent.planName}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right mr-2 shrink-0">
+                    <p className="text-[12px] font-bold tabular-nums">
+                      ${calcs.netAgentCommission.toLocaleString()}
+                    </p>
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/60">Net Payout</p>
+                  </div>
+                </div>
+              </AccordionTrigger>
+
+              <AccordionContent className="pb-0">
+                <div className="border-t border-border/40 bg-muted/[0.02]">
+                  {/* 1. Gross after shared deductions */}
+                  <FinRow
+                    label="Allocation Basis"
+                    value={calcs.agentBasis}
+                    tooltip={`${agent.allocationPct}% of side distributable ($${sideAmount.toLocaleString()})`}
+                  />
+
+                  {/* 2. Pre split deductions */}
+                  {calcs.preSplitDeds.length > 0 && (
+                    <Collapsible defaultOpen className="group/coll">
+                      <CollapsibleTrigger asChild>
+                        <div className="px-4 py-2 flex items-center justify-between cursor-pointer hover:bg-muted/30">
+                          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                            Pre-split deductions ({calcs.preSplitDeds.length})
+                          </p>
+                          <ChevronDown className="size-3 text-muted-foreground transition-transform group-data-[state=open]/coll:rotate-180" />
+                        </div>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        {calcs.preSplitDeds.map((d) => (
+                          <FinRow
+                            key={d.id}
+                            label={d.label}
+                            value={-d.amount}
+                            indent
+                            variant="muted"
+                          />
+                        ))}
+                      </CollapsibleContent>
+                    </Collapsible>
+                  )}
+
+                  <Separator className="my-1" />
+
+                  <FinRow
+                    label="Split Basis (Gross After Deductions)"
+                    value={calcs.adjustedBasis}
+                    variant="subtotal"
+                    tooltip={`$${calcs.agentBasis.toLocaleString()} basis − $${calcs.preSplitTotal.toLocaleString()} pre-split deductions`}
+                  />
+
+                  {/* 3. Post split commission */}
+                  <FinRow
+                    label={`Agent Split (${Math.round(agent.planSplit * 100)}%)`}
+                    value={calcs.postSplitCommission}
+                    tooltip={`${Math.round(agent.planSplit * 100)}% × $${calcs.adjustedBasis.toLocaleString()} adjusted basis`}
+                  />
+
+                  {/* 4. Post split deductions */}
+                  {calcs.postSplitDeds.length > 0 && (
+                    <Collapsible defaultOpen className="group/coll">
+                      <CollapsibleTrigger asChild>
+                        <div className="px-4 py-2 flex items-center justify-between cursor-pointer hover:bg-muted/30">
+                          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                            Post-split deductions ({calcs.postSplitDeds.length})
+                          </p>
+                          <ChevronDown className="size-3 text-muted-foreground transition-transform group-data-[state=open]/coll:rotate-180" />
+                        </div>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        {calcs.postSplitDeds.map((d) => (
+                          <FinRow
+                            key={d.id}
+                            label={d.label}
+                            value={-d.amount}
+                            indent
+                            variant="muted"
+                          />
+                        ))}
+                      </CollapsibleContent>
+                    </Collapsible>
+                  )}
+
+                  <Separator className="my-1" />
+
+                  {/* 5. Net agent commission */}
+                  <FinRow
+                    label="Agent Net Commission"
+                    value={calcs.netAgentCommission}
+                    variant="total"
+                  />
+
+                  {/* 6. Company dollar */}
+                  <FinRow
+                    label="Company Dollar"
+                    value={calcs.companyDollar}
+                    variant="muted"
+                    tooltip={`${Math.round((1 - agent.planSplit) * 100)}% × $${calcs.adjustedBasis.toLocaleString()} company share`}
+                  />
+
+                  {/* Add deduction button */}
+                  {isEditable && (
+                    <div className="px-4 py-2.5 border-t border-border/30">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-[10px] gap-1 px-2 text-muted-foreground hover:text-foreground"
+                          >
+                            <Plus className="size-3" /> Add deduction
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-44">
+                          <DropdownMenuItem onClick={() => setIsDeductionOpen(true)}>
+                            Add referral fee
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setIsDeductionOpen(true)}>
+                            Add post-split fee
+                          </DropdownMenuItem>
+                          {role !== "agent" && (
+                            <DropdownMenuItem onClick={() => setIsDeductionOpen(true)}>
+                              Add credit
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  )}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          ))}
+        </Accordion>
+      </div>
+    );
+  };
+
+  // ─── Company / Radius Breakdown (hidden from agent) ───────────────────────────
+
+  const renderCompanyBreakdown = () => {
+    if (role === "agent") return null;
+    return (
+      <div className="border rounded-lg bg-background overflow-hidden border-border/60">
+        <CDASectionHeader
+          title="05. Company & Radius"
+          className="bg-muted/20"
+          status={
+            <Badge variant="secondary" className="h-4 text-[9px] px-1.5 bg-slate-100 text-slate-600">
+              Not visible to agents
+            </Badge>
+          }
+        />
+        <div className="divide-y divide-border/50">
+          <FinRow
+            label={`Gross company dollar (${allAgentCalcs.length} agent${allAgentCalcs.length !== 1 ? "s" : ""})`}
+            value={totalCompanyDollar}
+            tooltip="Sum of all company dollar contributions across agents"
+          />
+          {radiusDeductions.map((d) => (
+            <FinRow key={d.id} label={d.label} value={-d.amount} variant="muted" />
+          ))}
+          <Separator />
+          <FinRow label="Net company dollar" value={companyNet} variant="total" />
+        </div>
+      </div>
+    );
+  };
+
+  // ─── Finalized View (left panel) ──────────────────────────────────────────────
+
   const renderFinalizedView = () => (
     <div className="space-y-6">
       {/* PDF Preview */}
@@ -1002,7 +1250,7 @@ export function CommissionBreakdown() {
             <FileText className="size-4 text-muted-foreground" />
             <span className="text-[13px] font-medium">PDF Preview</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <Button variant="ghost" size="sm" className="h-7 text-[10px] gap-1.5">
               <Download className="size-3" /> Download
             </Button>
@@ -1014,19 +1262,15 @@ export function CommissionBreakdown() {
             </Button>
           </div>
         </div>
-
-        {/* PDF Document Preview */}
         <div className="p-6 bg-slate-50">
           <div className="max-w-lg mx-auto bg-white border shadow-sm rounded p-8 space-y-6">
-            {/* Header */}
             <div className="flex items-start justify-between border-b pb-4">
               <div>
-                {/* Radius Logo */}
                 <div className="flex items-center gap-2 mb-2">
                   <div className="size-7 rounded-md bg-primary flex items-center justify-center">
                     <Building2 className="size-4 text-primary-foreground" />
                   </div>
-                  <span className="font-bold text-sm text-foreground">Radius Agent</span>
+                  <span className="font-bold text-sm">Radius Agent</span>
                 </div>
                 <h2 className="text-lg font-bold uppercase tracking-wide">
                   Commission Disbursement
@@ -1041,8 +1285,6 @@ export function CommissionBreakdown() {
                 <p>Prepared: {data.closeDate}</p>
               </div>
             </div>
-
-            {/* Property & Parties */}
             <div className="grid grid-cols-2 gap-4 text-[11px]">
               <div>
                 <p className="text-muted-foreground font-medium mb-0.5">Property</p>
@@ -1060,24 +1302,15 @@ export function CommissionBreakdown() {
                 <p className="text-muted-foreground font-medium mb-0.5">Agent Net Total</p>
                 <p className="font-semibold">${netPayable.toLocaleString()}.00</p>
               </div>
-              <div>
-                <p className="text-muted-foreground font-medium mb-0.5">Company Dollar</p>
-                <p className="font-semibold">${teamPortionTotal.toLocaleString()}.00</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground font-medium mb-0.5">Finalized By</p>
-                <p className="font-semibold">Ila Corcoran (Agent)</p>
-              </div>
             </div>
-
             <div className="border-t pt-4 space-y-1.5 text-[11px]">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Gross Commission</span>
-                <span className="font-semibold text-emerald-700">${gciTotal.toLocaleString()}.00</span>
+                <span className="font-semibold">${gciTotal.toLocaleString()}.00</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Pre-Split Deductions</span>
-                <span className="font-medium text-red-600">-${globalDeductionTotal.toLocaleString()}.00</span>
+                <span className="font-medium">-${sharedDeductionTotal.toLocaleString()}.00</span>
               </div>
               <div className="flex justify-between border-t pt-1 mt-1">
                 <span className="font-medium">Split Basis</span>
@@ -1085,14 +1318,13 @@ export function CommissionBreakdown() {
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Agent Net Total</span>
-                <span className="font-semibold text-emerald-700">${netPayable.toLocaleString()}.00</span>
+                <span className="font-semibold">${netPayable.toLocaleString()}.00</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Team Portion</span>
-                <span className="font-medium">${teamPortionTotal.toLocaleString()}.00</span>
+                <span className="text-muted-foreground">Company Dollar</span>
+                <span className="font-medium">${totalCompanyDollar.toLocaleString()}.00</span>
               </div>
             </div>
-
             <p className="text-center text-[9px] text-muted-foreground border-t pt-3">
               Prepared by Radius Agent, Inc. · California Licensed Real Estate Brokerage
               <br />
@@ -1103,7 +1335,7 @@ export function CommissionBreakdown() {
       </div>
 
       {/* DocuSign Routing */}
-      <div className="border rounded-lg bg-background overflow-hidden shadow-sm">
+      <div className="border rounded-lg bg-background overflow-hidden">
         <div className="px-4 py-3 bg-muted/30 border-b flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Send className="size-4 text-muted-foreground" />
@@ -1119,7 +1351,7 @@ export function CommissionBreakdown() {
             { name: "Rod Watson", role: "Team Lead", initials: "RW", status: "pending" },
             { name: "Accounting", role: "Copy only", initials: "AC", status: "copy" },
           ].map((signer) => (
-            <div key={signer.name} className="flex items-center justify-between px-4 py-3">
+            <div key={signer.name} className="flex items-center justify-between px-4 py-2.5">
               <div className="flex items-center gap-3">
                 <div className="size-7 rounded-full bg-muted flex items-center justify-center text-[10px] font-bold">
                   {signer.initials}
@@ -1147,7 +1379,7 @@ export function CommissionBreakdown() {
       </div>
 
       {/* Approval Timeline */}
-      <div className="border rounded-lg bg-background overflow-hidden shadow-sm">
+      <div className="border rounded-lg bg-background overflow-hidden">
         <div className="px-4 py-3 bg-muted/30 border-b">
           <span className="text-[13px] font-medium">Final Approval Timeline</span>
         </div>
@@ -1172,17 +1404,14 @@ export function CommissionBreakdown() {
     </div>
   );
 
+  // ─── Render ───────────────────────────────────────────────────────────────────
+
   return (
     <div className="flex flex-col h-screen bg-background font-inter">
-      {/* --- Top Header --- */}
+      {/* Top Header */}
       <header className="h-14 border-b flex items-center justify-between px-6 shrink-0 bg-background/50 backdrop-blur">
         <div className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowBackDialog(true)}
-            className="gap-1.5 text-xs shrink-0"
-          >
+          <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-muted-foreground hover:text-foreground">
             <ChevronLeft className="size-4" />
             Back to transaction
           </Button>
@@ -1201,7 +1430,7 @@ export function CommissionBreakdown() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5 px-2.5 py-1 border rounded-md bg-muted/20">
             <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
               Role
@@ -1217,115 +1446,158 @@ export function CommissionBreakdown() {
               </SelectContent>
             </Select>
           </div>
-          <Button variant="outline" size="sm" className="h-8 px-3 text-xs gap-1.5">
-            <Download className="size-3.5" /> Export
-          </Button>
+          <Separator orientation="vertical" className="h-6 mx-1" />
+          <div className="flex items-center gap-2">{renderFooterCTA()}</div>
         </div>
       </header>
 
-      {/* --- Workflow Banner --- */}
+      {/* Workflow Banner */}
       {renderWorkflowBanner()}
 
-      {/* --- Financial Strip + Workflow Rail --- */}
-      <div className="h-11 border-b bg-muted/5 flex items-center px-6 shrink-0 overflow-x-auto">
-        {/* KPIs */}
-        <div className="flex items-center gap-5 shrink-0">
-          <div className="flex items-center gap-1.5 whitespace-nowrap">
-            <span className="text-[10px] text-muted-foreground">Total GCI</span>
-            <span className="text-[12px] font-bold tabular-nums">${gciTotal.toLocaleString()}</span>
-          </div>
-          <Separator orientation="vertical" className="h-4" />
-          <div className="flex items-center gap-1.5 whitespace-nowrap">
-            <span className="text-[10px] text-muted-foreground">After Deductions</span>
-            <span className="text-[12px] font-bold tabular-nums">${grossAfterDeductions.toLocaleString()}</span>
-          </div>
-          <Separator orientation="vertical" className="h-4" />
-          <div className="flex items-center gap-1.5 whitespace-nowrap">
-            <span className="text-[10px] text-muted-foreground">Net to Agents</span>
-            <span className="text-[12px] font-bold tabular-nums text-emerald-600">${netPayable.toLocaleString()}</span>
-          </div>
-          <Separator orientation="vertical" className="h-4" />
-          <div className="flex items-center gap-1.5 whitespace-nowrap">
-            <span className="text-[10px] text-muted-foreground">Team Portion</span>
-            <span className="text-[12px] font-bold tabular-nums">${teamPortionTotal.toLocaleString()}</span>
-          </div>
-        </div>
+      {/* Financial Strip */}
+      <div className="h-12 border-b bg-zinc-100 dark:bg-zinc-950 flex items-center px-6 shrink-0 overflow-x-auto relative group overflow-hidden">
+        {/* MagicUI-inspired Shiny Animation Overlay */}
+        <div 
+          className="absolute inset-0 pointer-events-none bg-[linear-gradient(110deg,transparent,40%,rgba(255,255,255,0.9),50%,transparent,60%)] bg-[length:200%_100%] z-0" 
+          style={{ 
+            animation: "shimmer 2s infinite linear",
+          }}
+        />
+        
+        <style dangerouslySetInnerHTML={{ __html: `
+          @keyframes shimmer {
+            0% { background-position: 100% 0; }
+            100% { background-position: -100% 0; }
+          }
+        `}} />
 
-        {/* Horizontal Workflow Rail */}
-        <div className="ml-auto flex items-center gap-1 shrink-0">
-          {approvalSteps.map((step, i) => (
-            <div key={step.label} className="flex items-center gap-1">
-              {i > 0 && (
-                <ChevronRight className="size-3 text-muted-foreground/30 shrink-0" />
-              )}
-              <div
-                className={cn(
-                  "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium whitespace-nowrap transition-colors",
-                  step.status === "complete" && "bg-primary/10 text-primary",
-                  step.status === "active" && "bg-primary text-primary-foreground",
-                  step.status === "pending" && "text-muted-foreground/50"
-                )}
-              >
-                {step.status === "complete" && <CheckCircle2 className="size-3 shrink-0" />}
-                {step.status === "active" && <div className="size-1.5 rounded-full bg-current shrink-0" />}
-                {step.label}
-              </div>
+        <div className="flex items-center shrink-0 relative z-10 h-full">
+          <div className="flex items-center gap-2.5 px-3 py-1 rounded-md transition-colors hover:bg-white/60 group/item">
+            <div className="size-7 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 transition-transform group-hover/item:scale-110">
+              <BarChart3 className="size-3.5" />
             </div>
-          ))}
+            <div className="flex flex-col">
+              <span className="text-[9px] font-bold uppercase tracking-wider text-blue-600/60 leading-none mb-0.5">Total GCI</span>
+              <span className="text-[12px] font-bold tabular-nums text-blue-900 dark:text-blue-100 leading-none">
+                ${gciTotal.toLocaleString()}
+              </span>
+            </div>
+          </div>
+
+          <Separator orientation="vertical" className="h-8 w-px bg-slate-300 mx-2" />
+
+          <div className="flex items-center gap-2.5 px-3 py-1 rounded-md transition-colors hover:bg-white/60 group/item">
+            <div className="size-7 rounded-full bg-orange-50 flex items-center justify-center text-orange-600 transition-transform group-hover/item:scale-110">
+              <Calculator className="size-3.5" />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[9px] font-bold uppercase tracking-wider text-orange-600/60 leading-none mb-0.5">After Deductions</span>
+              <span className="text-[12px] font-bold tabular-nums text-orange-900 dark:text-orange-100 leading-none">
+                ${grossAfterDeductions.toLocaleString()}
+              </span>
+            </div>
+          </div>
+
+          <Separator orientation="vertical" className="h-8 w-px bg-slate-300 mx-2" />
+
+          <div className="flex items-center gap-2.5 px-3 py-1 rounded-md transition-colors hover:bg-white/60 group/item">
+            <div className="size-7 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 transition-transform group-hover/item:scale-110">
+              <Users className="size-3.5" />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-600/60 leading-none mb-0.5">Net to Agents</span>
+              <span className="text-[12px] font-bold tabular-nums text-emerald-900 dark:text-emerald-100 leading-none">
+                ${netPayable.toLocaleString()}
+              </span>
+            </div>
+          </div>
+
+          {role !== "agent" && (
+            <>
+              <Separator orientation="vertical" className="h-8 w-px bg-slate-300 mx-2" />
+              <div className="flex items-center gap-2.5 px-3 py-1 rounded-md transition-colors hover:bg-white/60 group/item">
+                <div className="size-7 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 transition-transform group-hover/item:scale-110">
+                  <Building2 className="size-3.5" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-indigo-600/60 leading-none mb-0.5">Company Dollar</span>
+                  <span className="text-[12px] font-bold tabular-nums text-indigo-900 dark:text-indigo-100 leading-none">
+                    ${totalCompanyDollar.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+
+              {radiusDeductionTotal > 0 && (
+                <>
+                  <Separator orientation="vertical" className="h-8 w-px bg-slate-300 mx-2" />
+                  <div className="flex items-center gap-2.5 px-3 py-1 rounded-md transition-colors hover:bg-white/60 group/item">
+                    <div className="size-7 rounded-full bg-slate-50 flex items-center justify-center text-slate-600 transition-transform group-hover/item:scale-110">
+                      <ShieldCheck className="size-3.5" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-slate-600/60 leading-none mb-0.5">Radius Fee</span>
+                      <span className="text-[12px] font-bold tabular-nums text-slate-900 dark:text-slate-100 leading-none">
+                        ${radiusDeductionTotal.toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                </>
+              )}
+            </>
+          )}
         </div>
       </div>
 
-      {/* --- Body --- */}
+      {/* Body */}
       <div className="flex-1 flex overflow-hidden">
-        {/* --- Left Panel (72%) --- */}
+        {/* Left Panel */}
         <div className="flex-[0.72] overflow-y-auto border-r bg-muted/[0.02]">
           <div className="py-6 px-6 md:px-8 space-y-5">
             {isLocked ? (
               renderFinalizedView()
             ) : (
               <>
-                {/* Section 1: GCI */}
-                <div className="border rounded-lg bg-background overflow-hidden shadow-sm border-border/60">
-                  <CDASectionHeader title="01. Gross Commission Income" className="bg-muted/30" />
+                <div className="border rounded-lg bg-background overflow-hidden border-border/60">
+                  <CDASectionHeader title="01. Gross Commission Income" className="bg-muted/20" />
                   <div className="divide-y divide-border/50">
                     <SpreadsheetRow
                       label="Purchase Price"
                       value={data.purchasePrice}
                       isSelected={selectedNode === "root"}
                       onClick={() => setSelectedNode("root")}
+                      className="px-4 py-2"
                     />
                     <SpreadsheetRow
                       label={`Commission Rate (${data.commissionRate}%)`}
                       value={`${data.commissionRate}%`}
-                      formula="price * (rate / 100)"
+                      formula="price × (rate / 100)"
                       isSelected={selectedNode === "root"}
                       onClick={() => setSelectedNode("root")}
+                      className="px-4 py-2"
                     />
                     <SpreadsheetRow
                       label="Gross Commission Total"
                       value={gciTotal}
                       variant="total"
+                      formula={`$${data.purchasePrice.toLocaleString()} × ${data.commissionRate}%`}
                       isSelected={selectedNode === "root"}
                       onClick={() => setSelectedNode("root")}
+                      className="bg-muted/5 px-4 py-2.5"
                     />
                   </div>
                 </div>
 
-                {/* Section 2: Pre-Split Deductions */}
-                <div className="border rounded-lg bg-background overflow-hidden shadow-sm border-border/60">
-                  <div className="flex items-center justify-between bg-muted/30 pr-3">
+                {/* Section 02: Pre-Split Deductions */}
+                <div className="border rounded-lg bg-background overflow-hidden border-border/60">
+                  <div className="flex items-center justify-between bg-muted/20 pr-3">
                     <CDASectionHeader
-                      title="02. Pre-Split Deductions"
-                      className="bg-transparent"
+                      title="02. Shared Pre-Split Deductions"
+                      className="bg-transparent border-none"
                     />
                     {isEditable && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 text-[10px] gap-1.5 px-2"
-                          >
+                          <Button variant="ghost" size="sm" className="h-7 text-[10px] gap-1.5 px-2 bg-background border shadow-none">
                             <Plus className="size-3" /> Add
                           </Button>
                         </DropdownMenuTrigger>
@@ -1346,36 +1618,55 @@ export function CommissionBreakdown() {
                     )}
                   </div>
                   <div className="divide-y divide-border/50">
-                    {data.globalDeductions.map((d) => (
-                      <SpreadsheetRow
-                        key={d.id}
-                        label={d.label}
-                        value={-d.amount}
-                        variant="danger"
-                        isSelected={selectedNode === `deduction-${d.id}`}
-                        onClick={() => setSelectedNode(`deduction-${d.id}`)}
-                      />
-                    ))}
+                    {sharedDeductions.length > 0 ? (
+                      sharedDeductions.map((d) => (
+                        <SpreadsheetRow
+                          key={d.id}
+                          label={d.label}
+                          value={-d.amount}
+                          variant="danger"
+                          isSelected={selectedNode === `deduction-${d.id}`}
+                          onClick={() => setSelectedNode(`deduction-${d.id}`)}
+                          className="px-4 py-2"
+                        />
+                      ))
+                    ) : (
+                       <div className="px-4 py-3 text-[11px] text-muted-foreground italic">No shared deductions</div>
+                    )}
+                    {/* Radius fee: visible to TL/radius only */}
+                    {role !== "agent" &&
+                      radiusDeductions.map((d) => (
+                        <SpreadsheetRow
+                          key={d.id}
+                          label={`${d.label} ·`}
+                          value={-d.amount}
+                          variant="subtle"
+                          isSelected={selectedNode === `deduction-${d.id}`}
+                          onClick={() => setSelectedNode(`deduction-${d.id}`)}
+                          className="px-4 py-2"
+                        />
+                      ))}
                     <SpreadsheetRow
                       label="Gross After Deductions"
                       value={grossAfterDeductions}
                       variant="total"
-                      formula="GCI - SUM(Pre-split)"
+                      formula="GCI − SUM(shared deductions)"
+                      className="bg-muted/5 px-4 py-2.5"
                     />
                   </div>
                 </div>
 
-                {/* Section 3: Allocation Sides */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">
+                {/* Section 03: Allocation Sides */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between px-1.5">
+                    <h3 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                       03. Allocation Sides
                     </h3>
                     {isEditable && role !== "agent" && (
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 text-[10px] gap-1.5"
+                        className="h-6 text-[10px] gap-1 px-1.5 hover:bg-muted/50"
                         onClick={() => setIsAllocationOpen(true)}
                       >
                         <Percent className="size-3" /> Change Allocation
@@ -1383,7 +1674,10 @@ export function CommissionBreakdown() {
                     )}
                   </div>
 
-                  <div className="space-y-4">
+                  <div className={cn(
+                    "grid gap-3",
+                    data.sides.length > 1 ? "grid-cols-2" : "grid-cols-1"
+                  )}>
                     {data.sides.map((side) => {
                       const sideAmount = grossAfterDeductions * (side.percentage / 100);
                       if (side.percentage === 0 && side.agents.length === 0 && role === "agent")
@@ -1391,106 +1685,119 @@ export function CommissionBreakdown() {
                       return (
                         <div
                           key={side.id}
-                          className="border rounded-lg bg-background overflow-hidden shadow-sm border-border/60"
+                          className="border rounded-lg bg-background overflow-hidden border-border/60 flex flex-col"
                         >
                           <div
-                            className="flex items-center justify-between p-3.5 bg-muted/10 cursor-pointer hover:bg-muted/20 transition-colors"
-                            onClick={() => setSelectedNode(`side-${side.id}`)}
+                            className="flex items-center justify-between px-4 py-2 bg-muted/20 border-b border-border/50"
                           >
-                            <div className="flex items-center gap-3">
-                              <div
-                                className={cn(
-                                  "size-7 rounded-md flex items-center justify-center",
-                                  side.type === "buyer"
-                                    ? "bg-blue-100 text-blue-700"
-                                    : "bg-purple-100 text-purple-700"
+                            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                              {side.type} Side
+                            </p>
+                            <span className="text-[11px] font-bold tabular-nums">
+                              {side.percentage}%
+                            </span>
+                          </div>
+                          
+                          <SpreadsheetRow
+                            label="Distributable"
+                            value={sideAmount}
+                            className="bg-muted/5 px-4 py-1.5 border-b border-border/40"
+                            labelClassName="text-[10px] text-muted-foreground uppercase font-medium"
+                            valueClassName="text-[11px] font-bold tabular-nums"
+                          />
+
+                          <div className="divide-y divide-border/40 flex-1">
+                            {side.agents.map((agent) => renderAgentRow(agent, sideAmount))}
+                            {side.agents.length === 0 && (
+                              <div className="flex items-center gap-2 px-4 py-2.5">
+                                <Circle className="size-3 text-muted-foreground/30" />
+                                <p className="text-[11px] text-muted-foreground/60 italic">
+                                  No agents assigned
+                                </p>
+                                {isEditable && role !== "agent" && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 text-[10px] px-2 ml-auto"
+                                    onClick={() => setIsAgentOpen(true)}
+                                  >
+                                    <Plus className="size-3 mr-1" /> Assign
+                                  </Button>
                                 )}
-                              >
-                                <Users className="size-3.5" />
                               </div>
-                              <div>
-                                <p className="text-[12px] font-semibold capitalize">
-                                  {side.type} Side ({side.percentage}%)
-                                </p>
-                                <p className="text-[10px] text-muted-foreground tabular-nums">
-                                  ${sideAmount.toLocaleString()} distributable
-                                </p>
-                              </div>
-                            </div>
-                            {isEditable && role !== "agent" && (
+                            )}
+                          </div>
+                          
+                          {isEditable && role !== "agent" && side.agents.length > 0 && (
+                            <div className="p-2 border-t border-border/40 bg-muted/5">
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="h-7 text-[10px] px-2"
+                                className="w-full h-7 text-[10px] bg-background shadow-none"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setIsAgentOpen(true);
                                 }}
                               >
-                                <UserPlus className="size-3 mr-1" /> Add Agent
+                                <UserPlus className="size-3 mr-1.5" /> Add Agent
                               </Button>
-                            )}
-                          </div>
-                          <div className="divide-y divide-border/40">
-                            {side.agents.map((agent) => renderAgentRow(agent, sideAmount))}
-                            {side.agents.length === 0 && (
-                              <div className="p-6 text-center">
-                                <p className="text-[11px] text-muted-foreground italic">
-                                  No agents assigned to this side
-                                </p>
-                              </div>
-                            )}
-                          </div>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
                   </div>
                 </div>
 
-                {/* Allocation Bar */}
-                <div className="space-y-2 pt-2">
-                  <div className="flex h-2 w-full rounded-full overflow-hidden bg-muted">
-                    {data.sides
-                      .flatMap((s) => s.agents)
-                      .map((a, i) => (
+                {/* Allocation bar */}
+                {allAgentCalcs.length > 0 && (
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex h-1.5 w-full rounded-full overflow-hidden bg-muted">
+                      {allAgentCalcs.map(({ agent, side }, i) => (
                         <div
-                          key={a.id}
+                          key={agent.id}
                           className={cn(
                             "h-full transition-all",
-                            i % 2 === 0 ? "bg-indigo-500" : "bg-emerald-500"
+                            i % 2 === 0 ? "bg-indigo-400" : "bg-slate-400"
                           )}
                           style={{
-                            width: `${(a.allocationPct / 100) * (data.sides.find((s) => s.agents.includes(a))?.percentage || 0)}%`,
+                            width: `${(agent.allocationPct / 100) * (side.percentage || 0)}%`,
                           }}
                         />
                       ))}
-                  </div>
-                  <div className="flex items-center justify-center flex-wrap gap-x-5 gap-y-1">
-                    {data.sides
-                      .flatMap((s) => s.agents)
-                      .map((a, i) => (
-                        <div key={a.id} className="flex items-center gap-1.5">
+                    </div>
+                    <div className="flex items-center flex-wrap gap-x-4 gap-y-0.5">
+                      {allAgentCalcs.map(({ agent }, i) => (
+                        <div key={agent.id} className="flex items-center gap-1">
                           <div
                             className={cn(
-                              "size-2 rounded-full",
-                              i % 2 === 0 ? "bg-indigo-500" : "bg-emerald-500"
+                              "size-1.5 rounded-full",
+                              i % 2 === 0 ? "bg-indigo-400" : "bg-slate-400"
                             )}
                           />
                           <span className="text-[10px] text-muted-foreground">
-                            {a.name} ({a.allocationPct}%)
+                            {agent.name} ({agent.allocationPct}%)
                           </span>
                         </div>
                       ))}
+                    </div>
                   </div>
-                </div>
+                )}
+
+                {/* Section 04: Agent Breakdown */}
+                {renderAgentBreakdown()}
+
+                {/* Section 05: Company / Radius Breakdown */}
+                {renderCompanyBreakdown()}
               </>
             )}
 
-            {/* Audit Log Section */}
+            {/* Activity Log */}
             <div className="border rounded-lg bg-background overflow-hidden shadow-sm border-border/60">
               <button
                 onClick={() => setShowAuditLog(!showAuditLog)}
-                className="w-full flex items-center justify-between px-4 py-3 bg-muted/20 hover:bg-muted/30 transition-colors"
+                className="w-full flex items-center justify-between px-4 py-2.5 bg-muted/20 hover:bg-muted/30 transition-colors"
+                aria-expanded={showAuditLog}
               >
                 <div className="flex items-center gap-2">
                   <FileText className="size-3.5 text-muted-foreground" />
@@ -1506,7 +1813,7 @@ export function CommissionBreakdown() {
                 )}
               </button>
               {showAuditLog && (
-                <div className="px-6 py-4">
+                <div className="px-5 py-3 border-t bg-muted/5">
                   <AuditTimeline events={auditEvents} />
                 </div>
               )}
@@ -1514,33 +1821,43 @@ export function CommissionBreakdown() {
           </div>
         </div>
 
-        {/* --- Right Panel (28%) --- */}
+        {/* Right Panel */}
         <aside className="flex-[0.28] min-w-[340px] bg-background flex flex-col shrink-0 overflow-hidden">
           <ScrollArea className="flex-1">
             <div className="p-5 space-y-5">
-              {/* Notes Preview */}
+              {/* Notes (compact) */}
               <div className="space-y-2">
-                <div className="flex items-start justify-between">
+                <div className="flex items-center justify-between">
                   <div>
                     <p className="text-[12px] font-semibold">Notes</p>
                     <p className="text-[10px] text-muted-foreground">
                       {notes.filter((n) => !n.resolved).length} unresolved
                     </p>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-[10px] px-2"
-                    onClick={() => setShowNotes(true)}
-                  >
-                    View all
-                  </Button>
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 text-[10px] px-2"
+                      onClick={() => setShowNotes(true)}
+                    >
+                      <Plus className="size-3 mr-1" /> Add
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-6 text-[10px] px-2"
+                      onClick={() => setShowNotes(true)}
+                    >
+                      View all
+                    </Button>
+                  </div>
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   {notes.slice(0, 2).map((note) => (
                     <div key={note.id} className="flex items-start gap-2">
-                      <div className="size-1.5 rounded-full bg-muted-foreground/40 mt-1.5 shrink-0" />
-                      <p className="text-[11px] text-muted-foreground truncate leading-tight">
+                      <div className="size-1.5 rounded-full bg-muted-foreground/30 mt-1.5 shrink-0" />
+                      <p className="text-[11px] text-muted-foreground line-clamp-2 leading-tight">
                         {note.text}
                       </p>
                     </div>
@@ -1553,16 +1870,15 @@ export function CommissionBreakdown() {
 
               <Separator />
 
-              {/* Dynamic Inspector */}
+              {/* Inspector: Transaction root */}
               {selectedNode === "root" && (
-                <div className="space-y-5">
+                <div className="space-y-4">
                   <div>
                     <h3 className="text-[13px] font-semibold">Transaction Details</h3>
                     <p className="text-[11px] text-muted-foreground mt-0.5">
                       Contract-level commission breakdown.
                     </p>
                   </div>
-
                   <div className="space-y-3">
                     <div className="space-y-1.5">
                       <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
@@ -1574,6 +1890,7 @@ export function CommissionBreakdown() {
                           disabled={!isEditable || role === "agent"}
                           value={data.purchasePrice.toLocaleString()}
                           className="pl-9 h-9 text-sm"
+                          readOnly
                         />
                       </div>
                     </div>
@@ -1587,22 +1904,22 @@ export function CommissionBreakdown() {
                           disabled={!isEditable || role === "agent"}
                           value={data.commissionRate}
                           className="pl-9 h-9 text-sm"
+                          readOnly
                         />
                       </div>
                     </div>
                   </div>
-
                   {isEditable && (
                     <div className="space-y-1.5">
                       <Button
-                        className="w-full h-9 text-[11px] justify-start"
+                        className="w-full h-8 text-[11px] justify-start"
                         variant="outline"
                         onClick={() => setIsDeductionOpen(true)}
                       >
                         <Plus className="size-3.5 mr-2" /> Add Credit
                       </Button>
                       <Button
-                        className="w-full h-9 text-[11px] justify-start"
+                        className="w-full h-8 text-[11px] justify-start"
                         variant="outline"
                         onClick={() => setIsDeductionOpen(true)}
                       >
@@ -1610,7 +1927,7 @@ export function CommissionBreakdown() {
                       </Button>
                       {role !== "agent" && (
                         <Button
-                          className="w-full h-9 text-[11px] justify-start"
+                          className="w-full h-8 text-[11px] justify-start"
                           variant="outline"
                           onClick={() => setIsDeductionOpen(true)}
                         >
@@ -1619,7 +1936,6 @@ export function CommissionBreakdown() {
                       )}
                     </div>
                   )}
-
                   <Accordion type="single" collapsible className="w-full">
                     <AccordionItem value="calc" className="border-none">
                       <AccordionTrigger className="hover:no-underline py-2 text-[11px] font-medium bg-muted/20 px-3 rounded-md">
@@ -1627,19 +1943,27 @@ export function CommissionBreakdown() {
                       </AccordionTrigger>
                       <AccordionContent className="pt-3 px-3 space-y-1.5">
                         <div className="flex justify-between text-[11px]">
-                          <span>Sales Price</span>
-                          <span>${data.purchasePrice.toLocaleString()}.00</span>
+                          <span className="text-muted-foreground">Sales Price</span>
+                          <span>${data.purchasePrice.toLocaleString()}</span>
                         </div>
                         <div className="flex justify-between text-[11px]">
-                          <span>Rate ({data.commissionRate}%)</span>
                           <span className="text-muted-foreground">
-                            × {data.commissionRate / 100}
+                            × {data.commissionRate}% rate
+                          </span>
+                          <span className="text-muted-foreground">
+                            = ${gciTotal.toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-[11px]">
+                          <span className="text-muted-foreground">− Shared deductions</span>
+                          <span className="text-muted-foreground">
+                            −${sharedDeductionTotal.toLocaleString()}
                           </span>
                         </div>
                         <Separator />
                         <div className="flex justify-between text-[11px] font-bold pt-0.5">
-                          <span>GCI Result</span>
-                          <span className="text-primary">${gciTotal.toLocaleString()}.00</span>
+                          <span>Split Basis</span>
+                          <span>${grossAfterDeductions.toLocaleString()}</span>
                         </div>
                       </AccordionContent>
                     </AccordionItem>
@@ -1647,18 +1971,18 @@ export function CommissionBreakdown() {
                 </div>
               )}
 
+              {/* Inspector: Side */}
               {selectedNode.startsWith("side-") && (
-                <div className="space-y-5">
+                <div className="space-y-4">
                   {(() => {
-                    const sideId = selectedNode.split("-")[1];
+                    const sideId = selectedNode.replace("side-", "");
                     const side = data.sides.find((s) => s.id === sideId);
                     if (!side) return null;
                     const sideAmount = grossAfterDeductions * (side.percentage / 100);
-                    const agentCommissions = side.agents.reduce((sum, a) => {
-                      const basis = sideAmount * (a.allocationPct / 100);
-                      return sum + basis * a.planSplit;
-                    }, 0);
-                    const companyDollar = sideAmount - agentCommissions;
+                    const agentNet = allAgentCalcs
+                      .filter(({ side: s }) => s.id === sideId)
+                      .reduce((sum, { calcs }) => sum + calcs.netAgentCommission, 0);
+                    const sideCompany = sideAmount - agentNet;
                     return (
                       <>
                         <div>
@@ -1666,22 +1990,27 @@ export function CommissionBreakdown() {
                             {side.type} Side Allocation
                           </h3>
                           <p className="text-[11px] text-muted-foreground mt-0.5">
-                            {side.percentage}% of gross commission.
+                            {side.percentage}% of split basis.
                           </p>
                         </div>
-                        <div className="border rounded-lg overflow-hidden divide-y divide-border/50 bg-muted/5">
-                          <SpreadsheetRow label="Side Gross" value={sideAmount} variant="header" />
-                          <SpreadsheetRow
-                            label="Agent Commissions"
-                            value={-agentCommissions}
-                            variant="danger"
-                          />
-                          <SpreadsheetRow label="Company Dollar" value={companyDollar} variant="total" />
+                        <div className="divide-y divide-border/50 border rounded-lg bg-muted/5 overflow-hidden">
+                          <div className="flex justify-between p-3 text-[12px]">
+                            <span className="text-muted-foreground">Side gross</span>
+                            <span className="font-medium">${sideAmount.toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between p-3 text-[12px]">
+                            <span className="text-muted-foreground">Agent net total</span>
+                            <span className="font-medium">${agentNet.toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between p-3 text-[12px] font-semibold bg-muted/20">
+                            <span>Company dollar</span>
+                            <span>${sideCompany.toLocaleString()}</span>
+                          </div>
                         </div>
                         {isEditable && (
                           <div className="space-y-1.5">
                             <Button
-                              className="w-full h-9 text-[11px] justify-start"
+                              className="w-full h-8 text-[11px] justify-start"
                               variant="outline"
                               disabled={role === "agent"}
                               onClick={() => setIsAgentOpen(true)}
@@ -1689,7 +2018,7 @@ export function CommissionBreakdown() {
                               <UserPlus className="size-3.5 mr-2" /> Add Agent
                             </Button>
                             <Button
-                              className="w-full h-9 text-[11px] justify-start"
+                              className="w-full h-8 text-[11px] justify-start"
                               variant="outline"
                               disabled={role === "agent"}
                               onClick={() => setIsAllocationOpen(true)}
@@ -1704,18 +2033,14 @@ export function CommissionBreakdown() {
                 </div>
               )}
 
+              {/* Inspector: Agent */}
               {selectedNode.startsWith("agent-") && (
-                <div className="space-y-5">
+                <div className="space-y-4">
                   {(() => {
-                    const agentId = selectedNode.split("-")[1];
-                    const agent = data.sides.flatMap((s) => s.agents).find((a) => a.id === agentId);
-                    if (!agent) return null;
-                    const side = data.sides.find((s) => s.agents.some((a) => a.id === agentId));
-                    const sideAmount = grossAfterDeductions * ((side?.percentage || 0) / 100);
-                    const agentBasis = sideAmount * (agent.allocationPct / 100);
-                    const afterSplit = agentBasis * agent.planSplit;
-                    const dedTotal = agent.deductions.reduce((s, d) => s + d.amount, 0);
-                    const net = afterSplit - dedTotal;
+                    const agentId = selectedNode.replace("agent-", "");
+                    const entry = allAgentCalcs.find(({ agent }) => agent.id === agentId);
+                    if (!entry) return null;
+                    const { agent, calcs } = entry;
                     return (
                       <>
                         <div className="flex items-center gap-3">
@@ -1729,37 +2054,51 @@ export function CommissionBreakdown() {
                           </div>
                         </div>
 
-                        <div className="p-4 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 rounded-lg text-center">
-                          <p className="text-[10px] text-emerald-600 font-semibold uppercase tracking-widest mb-1">
-                            Estimated Net Payout
+                        <div className="px-4 py-3 border rounded-lg bg-muted/30 text-center">
+                          <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-widest mb-1">
+                            Net Commission
                           </p>
-                          <p className="text-2xl font-bold text-emerald-700 tabular-nums">
-                            ${net.toLocaleString()}
+                          <p className="text-2xl font-bold tabular-nums">
+                            ${calcs.netAgentCommission.toLocaleString()}
                           </p>
                         </div>
 
                         <div className="space-y-2">
                           <h4 className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                            Worksheet
+                            Summary
                           </h4>
-                          <div className="divide-y divide-border/50 border rounded-lg bg-muted/5">
-                            <div className="flex justify-between p-3 text-[12px]">
-                              <span className="text-muted-foreground">Allocation Basis</span>
-                              <span className="font-medium">${agentBasis.toLocaleString()}</span>
+                          <div className="divide-y divide-border/50 border rounded-lg bg-muted/5 overflow-hidden text-[12px]">
+                            <div className="flex justify-between p-2.5">
+                              <span className="text-muted-foreground">Allocation basis</span>
+                              <span className="font-medium">${calcs.agentBasis.toLocaleString()}</span>
                             </div>
-                            <div className="flex justify-between p-3 text-[12px]">
+                            {calcs.preSplitTotal > 0 && (
+                              <div className="flex justify-between p-2.5">
+                                <span className="text-muted-foreground">Pre-split deductions</span>
+                                <span className="font-medium">
+                                  −${calcs.preSplitTotal.toLocaleString()}
+                                </span>
+                              </div>
+                            )}
+                            <div className="flex justify-between p-2.5">
                               <span className="text-muted-foreground">
-                                Split ({agent.planSplit * 100}%)
+                                Split ({Math.round(agent.planSplit * 100)}%)
                               </span>
                               <span className="font-medium">
-                                -${(agentBasis * (1 - agent.planSplit)).toLocaleString()}
+                                ${calcs.postSplitCommission.toLocaleString()}
                               </span>
                             </div>
-                            <div className="flex justify-between p-3 text-[12px]">
-                              <span className="text-muted-foreground">Deductions</span>
-                              <span className="font-medium text-red-600">
-                                -${dedTotal.toLocaleString()}
-                              </span>
+                            {calcs.postSplitTotal > 0 && (
+                              <div className="flex justify-between p-2.5">
+                                <span className="text-muted-foreground">Post-split deductions</span>
+                                <span className="font-medium">
+                                  −${calcs.postSplitTotal.toLocaleString()}
+                                </span>
+                              </div>
+                            )}
+                            <div className="flex justify-between p-2.5 bg-muted/20 font-semibold">
+                              <span>Net commission</span>
+                              <span>${calcs.netAgentCommission.toLocaleString()}</span>
                             </div>
                           </div>
                         </div>
@@ -1767,18 +2106,18 @@ export function CommissionBreakdown() {
                         {isEditable && (
                           <div className="space-y-1.5">
                             <Button
-                              className="w-full h-9 text-[11px]"
+                              className="w-full h-8 text-[11px]"
                               disabled={role === "agent"}
                               variant="secondary"
                             >
-                              Apply Plan
+                              Change Plan
                             </Button>
                             <Button
-                              className="w-full h-9 text-[11px]"
+                              className="w-full h-8 text-[11px]"
                               variant="outline"
                               onClick={() => setIsDeductionOpen(true)}
                             >
-                              Add Post-Split Deduction
+                              Add Deduction
                             </Button>
                           </div>
                         )}
@@ -1788,10 +2127,11 @@ export function CommissionBreakdown() {
                 </div>
               )}
 
+              {/* Inspector: Deduction */}
               {selectedNode.startsWith("deduction-") && (
-                <div className="space-y-5">
+                <div className="space-y-4">
                   {(() => {
-                    const dedId = selectedNode.split("-")[1];
+                    const dedId = selectedNode.replace("deduction-", "");
                     const ded = data.globalDeductions.find((d) => d.id === dedId);
                     if (!ded) return null;
                     return (
@@ -1799,7 +2139,9 @@ export function CommissionBreakdown() {
                         <div>
                           <h3 className="text-[13px] font-semibold">{ded.label}</h3>
                           <p className="text-[11px] text-muted-foreground mt-0.5">
-                            Pre-split transaction deduction.
+                            {ded.type === "radius_fee"
+                              ? "Radius platform fee — not visible to agents."
+                              : "Pre-split transaction deduction."}
                           </p>
                         </div>
                         <div className="border rounded-lg p-4 bg-muted/10 space-y-3">
@@ -1824,17 +2166,19 @@ export function CommissionBreakdown() {
                               <p className="text-[10px] text-muted-foreground uppercase font-semibold">
                                 Editable By
                               </p>
-                              <p className="text-[11px] font-medium mt-1">TL, Radius</p>
+                              <p className="text-[11px] font-medium mt-1">
+                                {ded.type === "radius_fee" ? "Radius only" : "TL, Radius"}
+                              </p>
                             </div>
                           </div>
                         </div>
                         {isEditable && role !== "agent" && (
                           <div className="space-y-1.5">
-                            <Button className="w-full h-9 text-[11px]" variant="outline">
+                            <Button className="w-full h-8 text-[11px]" variant="outline">
                               Edit Deduction
                             </Button>
                             <Button
-                              className="w-full h-9 text-[11px] text-red-600"
+                              className="w-full h-8 text-[11px] text-destructive"
                               variant="ghost"
                             >
                               Delete Deduction
@@ -1849,9 +2193,9 @@ export function CommissionBreakdown() {
             </div>
           </ScrollArea>
 
-          {/* Inspector Footer Info */}
+          {/* Inspector footer */}
           <div className="p-4 border-t bg-muted/10 shrink-0">
-            <div className="flex items-start gap-2.5 p-3 bg-muted/40 rounded-lg">
+            <div className="flex items-start gap-2 p-2.5 bg-muted/40 rounded-lg">
               <Info className="size-3.5 text-muted-foreground shrink-0 mt-0.5" />
               <p className="text-[10px] text-muted-foreground leading-relaxed">
                 {isLocked
@@ -1865,7 +2209,7 @@ export function CommissionBreakdown() {
         </aside>
       </div>
 
-      {/* --- Footer Action Bar --- */}
+      {/* Footer Action Bar */}
       <footer className="h-14 border-t flex items-center justify-between px-6 bg-background shrink-0 z-10">
         <div className="flex items-center gap-2">
           {isLocked ? (
@@ -1881,10 +2225,21 @@ export function CommissionBreakdown() {
           )}
           <StatusBadge status={status} />
         </div>
-        <div className="flex items-center gap-3">{renderFooterCTA()}</div>
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="sm" className="h-8 text-[11px] text-muted-foreground" onClick={() => setShowNotes(true)}>
+            <MessageSquare className="size-3.5 mr-2" />
+            Notes ({notes.length})
+          </Button>
+          <Button variant="ghost" size="sm" className="h-8 text-[11px] text-muted-foreground" onClick={() => setShowAuditLog(!showAuditLog)}>
+            <FileText className="size-3.5 mr-2" />
+            Activity
+          </Button>
+        </div>
       </footer>
 
-      {/* --- Notes Sheet --- */}
+      <CDAFlowSwitcher />
+
+      {/* Notes Sheet */}
       <Sheet open={showNotes} onOpenChange={setShowNotes}>
         <SheetContent className="w-[400px] sm:w-[480px] flex flex-col p-0">
           <SheetHeader className="px-6 py-4 border-b">
@@ -1895,7 +2250,6 @@ export function CommissionBreakdown() {
               Internal CDA communication — not client-facing.
             </p>
           </SheetHeader>
-
           <ScrollArea className="flex-1">
             <div className="px-6 py-4 space-y-4">
               {notes.map((note) => (
@@ -1936,7 +2290,6 @@ export function CommissionBreakdown() {
               )}
             </div>
           </ScrollArea>
-
           <div className="px-6 py-4 border-t space-y-3">
             <Textarea
               placeholder="Add an internal note..."
@@ -1955,7 +2308,7 @@ export function CommissionBreakdown() {
         </SheetContent>
       </Sheet>
 
-      {/* --- TL Request Changes Dialog --- */}
+      {/* TL Request Changes Dialog */}
       <Dialog open={showChangeRequestDialog} onOpenChange={setShowChangeRequestDialog}>
         <DialogContent className="sm:max-w-[440px]">
           <DialogHeader>
@@ -1987,7 +2340,7 @@ export function CommissionBreakdown() {
         </DialogContent>
       </Dialog>
 
-      {/* --- Add Deduction Dialog --- */}
+      {/* Add Deduction Dialog */}
       <Dialog open={isDeductionOpen} onOpenChange={setIsDeductionOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
@@ -1998,32 +2351,33 @@ export function CommissionBreakdown() {
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="name" className="text-right text-sm">
+              <Label htmlFor="ded-name" className="text-right text-sm">
                 Name
               </Label>
-              <Input id="name" placeholder="Referral Fee" className="col-span-3" />
+              <Input id="ded-name" placeholder="Referral Fee" className="col-span-3" />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="amount" className="text-right text-sm">
+              <Label htmlFor="ded-amount" className="text-right text-sm">
                 Amount
               </Label>
               <div className="col-span-3 relative">
                 <DollarSign className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
-                <Input id="amount" placeholder="0.00" className="pl-9" />
+                <Input id="ded-amount" placeholder="0.00" className="pl-9" />
               </div>
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="type" className="text-right text-sm">
-                Type
-              </Label>
-              <Select defaultValue="pre">
+              <Label className="text-right text-sm">Type</Label>
+              <Select defaultValue="referral">
                 <SelectTrigger className="col-span-3">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="pre">Pre-Split</SelectItem>
-                  <SelectItem value="post">Post-Split</SelectItem>
+                  <SelectItem value="referral">Referral (pre-split)</SelectItem>
+                  <SelectItem value="post_split">Post-split fee</SelectItem>
                   <SelectItem value="credit">Credit</SelectItem>
+                  {role !== "agent" && (
+                    <SelectItem value="pre_split">Shared pre-split</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -2037,7 +2391,7 @@ export function CommissionBreakdown() {
         </DialogContent>
       </Dialog>
 
-      {/* --- Add Agent Dialog --- */}
+      {/* Add Agent Dialog */}
       <Dialog open={isAgentOpen} onOpenChange={setIsAgentOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
@@ -2048,18 +2402,18 @@ export function CommissionBreakdown() {
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="agent" className="text-right text-sm">
+              <Label htmlFor="agent-search" className="text-right text-sm">
                 Search
               </Label>
-              <Input id="agent" placeholder="Name or email..." className="col-span-3" />
+              <Input id="agent-search" placeholder="Name or email..." className="col-span-3" />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="alloc" className="text-right text-sm">
+              <Label htmlFor="agent-alloc" className="text-right text-sm">
                 Allocation
               </Label>
               <div className="col-span-3 relative">
                 <Percent className="absolute right-3 top-2.5 size-4 text-muted-foreground" />
-                <Input id="alloc" placeholder="0" className="pr-9" />
+                <Input id="agent-alloc" placeholder="0" className="pr-9" />
               </div>
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
@@ -2084,7 +2438,7 @@ export function CommissionBreakdown() {
         </DialogContent>
       </Dialog>
 
-      {/* --- Back Navigation Dialog --- */}
+      {/* Back Navigation Dialog */}
       <AlertDialog open={showBackDialog} onOpenChange={setShowBackDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -2095,7 +2449,11 @@ export function CommissionBreakdown() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <Button variant="outline" size="sm" onClick={() => navigate("/transaction-detail")}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate("/transaction-detail")}
+            >
               Save draft
             </Button>
             <AlertDialogAction onClick={() => navigate("/transaction-detail")}>
