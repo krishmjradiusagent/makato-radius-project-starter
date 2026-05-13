@@ -207,9 +207,9 @@
     </div>
 
     <!-- Default Assignments section -->
-    <section id="defaults-section" class="flex flex-col gap-4">
+    <!-- <section id="defaults-section" class="flex flex-col gap-4">
       <!-- will be rendered by JS -->
-    </section>
+    </section> -->
 
   </div>
 </main>
@@ -638,7 +638,7 @@ function showToast(msg) {
 function renderAll() {
   renderPlansSection();
   renderFeesSection();
-  renderAgentsTable();
+  // renderAgentsTable();
 }
 
 function renderPlansSection() {
@@ -750,13 +750,10 @@ function renderAgentsTable() {
         <div class="flex flex-wrap gap-1">
           <span class="inline-flex items-center rounded-md border border-primary/20 bg-primary/5 px-2 py-0.5 text-[11px] font-medium text-primary">TC Fee</span>
           <span class="inline-flex items-center rounded-md border border-primary/20 bg-primary/5 px-2 py-0.5 text-[11px] font-medium text-primary">RM Fee</span>
+          <span class="inline-flex items-center rounded-md border border-primary/20 bg-primary/5 px-2 py-0.5 text-[11px] font-medium text-primary">E&O Fee</span>
         </div>
       </td>
-      <td class="px-4 py-3 text-right">
-        <button class="opacity-0 group-hover:opacity-100 size-8 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted transition-all">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
-        </button>
-      </td>
+
     </tr>
   `).join('');
 
@@ -772,7 +769,7 @@ function renderAgentsTable() {
             <th class="px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Email</th>
             <th class="px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Commission Plan</th>
             <th class="px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Default Fees</th>
-            <th class="px-4 py-2.5"></th>
+
           </tr>
         </thead>
         <tbody class="divide-y">${rows}</tbody>

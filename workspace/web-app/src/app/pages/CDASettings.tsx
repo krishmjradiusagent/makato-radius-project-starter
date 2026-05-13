@@ -1508,7 +1508,7 @@ function DefaultAssignmentsTable({
               <TableHead className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/60">Email</TableHead>
               <TableHead className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/60">Commission Plan</TableHead>
               <TableHead className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/60">Default Fees</TableHead>
-              <TableHead className="w-[50px] pr-6"></TableHead>
+
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -1553,54 +1553,20 @@ function DefaultAssignmentsTable({
                     <TableCell>
                       {assignedFees.length > 0 ? (
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          {assignedFees.slice(0, 2).map((fee) => (
+                          {assignedFees.slice(0, 5).map((fee) => (
                             <Badge key={fee.id} variant="secondary" className="px-2 py-0 h-4.5 text-[10px] font-semibold bg-indigo-50 text-indigo-700 border-transparent">
                               {fee.name}
                             </Badge>
                           ))}
-                          {assignedFees.length > 2 && (
-                            <span className="text-[10px] font-bold text-muted-foreground/40">+{assignedFees.length - 2} more</span>
+                          {assignedFees.length > 5 && (
+                            <span className="text-[10px] font-bold text-muted-foreground/40">+{assignedFees.length - 5} more</span>
                           )}
                         </div>
                       ) : (
                         <span className="text-xs text-muted-foreground/40 font-medium">None</span>
                       )}
                     </TableCell>
-                  <TableCell className="pr-6">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          aria-label={`${agent.name} assignment menu`}
-                          className="size-8 hover:bg-background shadow-sm"
-                        >
-                          <MoreVertical className="size-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" sideOffset={8} className="w-[160px]">
-                        <DropdownMenuGroup>
-                          <DropdownMenuItem onClick={() => onEdit(assignment)}>
-                            <Edit3 className="size-4" />
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => onPreview(assignment)}>
-                            <FileText className="size-4" />
-                            Preview
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => onDeals(assignment)}>
-                            <Briefcase className="size-4" />
-                            Deals
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem variant="destructive" onClick={() => onClear(assignment)}>
-                            <Trash2 className="size-4" />
-                            Clear
-                          </DropdownMenuItem>
-                        </DropdownMenuGroup>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
+
                 </TableRow>
               );
             })}
@@ -2088,7 +2054,7 @@ export function CDASettings() {
                       <div className="flex items-center gap-2">
                         <AgentAvatarStack 
                           agents={assignedAgents.map(a => ({ name: a.name, avatarUrl: a.avatarUrl }))} 
-                          max={3} 
+                          max={5} 
                           size="sm"
                         />
                         {assignedAgents.length === 0 && (
@@ -2391,6 +2357,7 @@ export function CDASettings() {
         <div className="flex flex-col gap-8 px-4 py-9">
           {renderCommissionPlans()}
           {renderFeeTypes()}
+          {/* 
           {state.defaultAssignments.length === 0 ? (
             <EmptySection
               title="Default Assignments"
@@ -2411,7 +2378,8 @@ export function CDASettings() {
               onClear={(assignment) => setState((current) => ({ ...current, clearAssignmentTarget: assignment }))}
               onAddDefaults={() => setState((current) => ({ ...current, activeDialog: "assign-defaults", assignDefaultsSource: { from: "bulk" }, assignDefaultsForm: getFreshAssignDefaultsForm(), assignDefaultsErrors: {} }))}
             />
-          )}
+          )} 
+          */}
         </div>
       </main>
 
