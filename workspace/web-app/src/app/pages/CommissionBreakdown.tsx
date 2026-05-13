@@ -132,7 +132,7 @@ function initials(name: string) {
 }
 
 /** Editable value for deduction rows — no clear X (row has its own delete) */
-function DeductionValue({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+function DeductionValue({ value, onChange, readOnly }: { value: number; onChange: (v: number) => void; readOnly?: boolean }) {
   const [editing, setEditing] = useState(false);
   const [raw, setRaw] = useState(String(value));
   const inputRef = useRef<HTMLInputElement>(null);
@@ -144,6 +144,10 @@ function DeductionValue({ value, onChange }: { value: number; onChange: (v: numb
     setEditing(false);
     const n = Number(raw.replace(/[^0-9.]/g, ""));
     onChange(isNaN(n) ? 0 : Math.round(n));
+  }
+
+  if (readOnly) {
+    return <span className="text-sm font-semibold tabular-nums text-muted-foreground">{currency(value)}</span>;
   }
 
   if (editing) {
@@ -174,9 +178,11 @@ function DeductionValue({ value, onChange }: { value: number; onChange: (v: numb
 function EditableValue({
   value,
   onChange,
+  readOnly,
 }: {
   value: number;
   onChange: (v: number) => void;
+  readOnly?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [raw, setRaw] = useState(String(value));
@@ -189,6 +195,10 @@ function EditableValue({
     setEditing(false);
     const n = Number(raw.replace(/[^0-9.]/g, ""));
     onChange(isNaN(n) ? 0 : Math.round(n));
+  }
+
+  if (readOnly) {
+    return <span className="text-sm font-semibold tabular-nums text-muted-foreground">{currency(value)}</span>;
   }
 
   if (editing) {
@@ -237,10 +247,29 @@ export function CommissionBreakdown() {
   const [statementNotes, setStatementNotes] = useState("");
   const [includeProgressInfo, setIncludeProgressInfo] = useState(false);
   const [appliedPlans, setAppliedPlans] = useState<Record<string, string | null>>({});
-  const [postSplitDeductions, setPostSplitDeductions] = useState<Record<string, Array<{ id: string; name: string; amount: number }>>>({
+  // txStatus drives approval flow: agent submits → TL approves/rejects
+  const [txStatus, setTxStatus] = useState<"draft" | "submitted" | "approved" | "rejected">("draft");
+  const [rejectionNote, setRejectionNote] = useState("");
+  const [showSubmitDialog, setShowSubmitDialog] = useState(false);
+  const [showApproveDialog, setShowApproveDialog] = useState(false);
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [rejectInput, setRejectInput] = useState("");
+  // Simple pre-split deduction for agent role (Credits / Referral Fees)
+  const [showAgentPreSplitDialog, setShowAgentPreSplitDialog] = useState(false);
+  const [agentPreSplitLabel, setAgentPreSplitLabel] = useState("");
+  const [agentPreSplitAmount, setAgentPreSplitAmount] = useState("");
+
+  const [preSplitDeductions, setPreSplitDeductions] = useState<Record<string, Array<{ id: string; name: string; amount: number }>>>({
     a1: [
-      { id: "d1", name: "File Review Fee", amount: 25 },
-      { id: "d2", name: "RERM", amount: 124 },
+      { id: "pre1", name: "Credits", amount: 200 },
+      { id: "pre2", name: "Referrals", amount: 50 },
+    ],
+  });
+
+  const [postSplitDeductions, setPostSplitDeductions] = useState<Record<string, Array<{ id: string; name: string; amount: number; isRadiusFee?: boolean }>>>({
+    a1: [
+      { id: "d1", name: "File Review Fee", amount: 25, isRadiusFee: true },
+      { id: "d2", name: "RERM", amount: 124, isRadiusFee: true },
       { id: "d3", name: "SBTC", amount: 400 },
       { id: "d4", name: "E&O", amount: 250 },
     ],
@@ -312,6 +341,24 @@ export function CommissionBreakdown() {
   const officeNet = grossIncome - totalAgentPayout;
   const activeSideOfficeShare = Math.max(grossIncome - totalAgentPayout, 0);
 
+  // Permission helpers
+  const isAgent = role === "agent";
+  const isTL = role === "team_lead";
+  const canEditAll = role === "radius_auditing";
+  const isLocked = txStatus === "submitted" || txStatus === "approved";
+  const STATUS_LABELS: Record<typeof txStatus, string> = {
+    draft: "Draft",
+    submitted: "Pending approval",
+    approved: "Approved",
+    rejected: "Returned for edits",
+  };
+  const STATUS_COLORS: Record<typeof txStatus, string> = {
+    draft: "text-muted-foreground border-muted-foreground/30",
+    submitted: "text-amber-600 border-amber-300 bg-amber-50",
+    approved: "text-emerald-700 border-emerald-300 bg-emerald-50",
+    rejected: "text-destructive border-destructive/30 bg-destructive/5",
+  };
+
   return (
     <div className="min-h-screen bg-muted/40">
       <CDAFlowSwitcher />
@@ -354,7 +401,40 @@ export function CommissionBreakdown() {
             <Separator orientation="vertical" className="h-4 shrink-0" />
             <span className="shrink-0 text-xs text-muted-foreground">May 13, 2026</span>
           </div>
-          <Button size="sm" className="h-8 shrink-0 rounded-lg px-4 text-xs">Submit approval</Button>
+          <div className="flex items-center gap-2">
+            {txStatus !== "draft" && (
+              <span className={cn("rounded-full border px-3 py-1 text-xs font-medium", STATUS_COLORS[txStatus])}>
+                {STATUS_LABELS[txStatus]}
+              </span>
+            )}
+            {rejectionNote && txStatus === "draft" && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="rounded-full border border-destructive/30 bg-destructive/5 px-3 py-1 text-xs font-medium text-destructive cursor-default">
+                    Returned — see note
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-64">{rejectionNote}</TooltipContent>
+              </Tooltip>
+            )}
+            {/* Agent: submit when draft */}
+            {isAgent && txStatus === "draft" && (
+              <Button size="sm" className="h-8 shrink-0 rounded-lg px-4 text-xs" onClick={() => setShowSubmitDialog(true)}>
+                Submit for approval
+              </Button>
+            )}
+            {/* TL/Radius: approve or reject when submitted */}
+            {!isAgent && txStatus === "submitted" && (
+              <>
+                <Button size="sm" variant="outline" className="h-8 rounded-lg px-4 text-xs text-destructive border-destructive/40 hover:bg-destructive/5" onClick={() => setShowRejectDialog(true)}>
+                  Return
+                </Button>
+                <Button size="sm" className="h-8 rounded-lg px-4 text-xs" style={{ backgroundColor: "#5A5FF2" }} onClick={() => setShowApproveDialog(true)}>
+                  Approve
+                </Button>
+              </>
+            )}
+          </div>
         </div>
 
         {/* ── Stats strip ── */}
@@ -403,14 +483,20 @@ export function CommissionBreakdown() {
                     <div className="mt-0.5 flex items-center gap-2">
                       <span className="text-xs text-muted-foreground">{side.subline}</span>
                       <span className="text-xs text-muted-foreground/40">|</span>
-                      <Badge
-                        variant="outline"
-                        className="cursor-pointer rounded-full px-2 py-0 text-[11px] font-medium hover:opacity-80"
-                        style={{ color: "#5A5FF2", borderColor: "#5A5FF2" }}
-                        onClick={(e) => { e.stopPropagation(); setShowAwardDialog(true); }}
-                      >
-                        Award {side.award}%
-                      </Badge>
+                      {!isAgent && !isLocked ? (
+                        <Badge
+                          variant="outline"
+                          className="cursor-pointer rounded-full px-2 py-0 text-[11px] font-medium hover:opacity-80"
+                          style={{ color: "#5A5FF2", borderColor: "#5A5FF2" }}
+                          onClick={(e) => { e.stopPropagation(); setShowAwardDialog(true); }}
+                        >
+                          Award {side.award}%
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="rounded-full px-2 py-0 text-[11px] font-medium text-muted-foreground">
+                          Award {side.award}%
+                        </Badge>
+                      )}
                     </div>
                   </div>
                   <div className="shrink-0 text-right">
@@ -451,13 +537,15 @@ export function CommissionBreakdown() {
                       </div>
                     </div>
                   ))}
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setAddAgentSideId(side.id); setAgentSearch(""); setPendingAgent(null); setAgentAllocations({}); setShowAddAgentDialog(true); }}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed px-4 py-2.5 text-xs font-medium transition-colors hover:bg-[#5A5FF2]/5"
-                    style={{ borderColor: "#5A5FF2", color: "#5A5FF2" }}
-                  >
-                    <Plus className="size-3.5" />Add agent
-                  </button>
+                  {!isAgent && !isLocked && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setAddAgentSideId(side.id); setAgentSearch(""); setPendingAgent(null); setAgentAllocations({}); setShowAddAgentDialog(true); }}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed px-4 py-2.5 text-xs font-medium transition-colors hover:bg-[#5A5FF2]/5"
+                      style={{ borderColor: "#5A5FF2", color: "#5A5FF2" }}
+                    >
+                      <Plus className="size-3.5" />Add agent
+                    </button>
+                  )}
                 </div>
               </Card>
             ))}
@@ -517,14 +605,16 @@ export function CommissionBreakdown() {
                       </DropdownMenu>
                     ) : null}
                     <Button variant="outline" size="sm" className="h-7 rounded-lg px-3 text-xs" onClick={() => setShowStatementDialog(true)}>Statement</Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 w-7 rounded-lg p-0 border-destructive/40 text-destructive hover:bg-destructive/5 hover:text-destructive"
-                      onClick={() => setShowDeleteConfirm(true)}
-                    >
-                      <Trash2 className="size-3.5" />
-                    </Button>
+                    {!isAgent && !isLocked && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 w-7 rounded-lg p-0 border-destructive/40 text-destructive hover:bg-destructive/5 hover:text-destructive"
+                        onClick={() => setShowDeleteConfirm(true)}
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    )}
                     </div>
                   </div>
                 </div>
@@ -533,16 +623,47 @@ export function CommissionBreakdown() {
                 <div className="flex-1 px-5 py-4">
                   <div className="flex items-center justify-between py-3">
                     <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Commission Basis</p>
-                    <EditableValue value={selectedAgent.commissionBasis} onChange={(v) => setAgentField("commissionBasis", v)} />
+                    <EditableValue value={selectedAgent.commissionBasis} onChange={(v) => setAgentField("commissionBasis", v)} readOnly={isAgent || isLocked} />
                   </div>
-                  <button
-                    onClick={() => setFeeDialogTiming("pre-split")}
-                    className="flex w-full items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-colors hover:bg-[#5A5FF2]/15"
-                    style={{ color: "#5A5FF2", backgroundColor: "rgb(90 95 242 / 0.08)" }}
-                  >
-                    <Plus className="size-3.5" />
-                    Pre-split deduction
-                  </button>
+                  {/* Pre-split deductions (Credits, Referrals) — agents can edit amounts, TL/Radius can also add/delete */}
+                  {(preSplitDeductions[selectedAgent.agent.id] ?? []).map((ded) => (
+                    <div key={ded.id} className="group flex items-center justify-between py-1.5">
+                      <p className="text-xs text-muted-foreground">{ded.name}</p>
+                      <div className="flex items-center gap-2">
+                        <DeductionValue
+                          value={ded.amount}
+                          readOnly={isLocked}
+                          onChange={(v) => setPreSplitDeductions((prev) => ({
+                            ...prev,
+                            [selectedAgent.agent.id]: (prev[selectedAgent.agent.id] ?? []).map((d) => d.id === ded.id ? { ...d, amount: v } : d),
+                          }))}
+                        />
+                        {!isAgent && !isLocked && (
+                          <button
+                            onClick={() => setPreSplitDeductions((prev) => ({
+                              ...prev,
+                              [selectedAgent.agent.id]: (prev[selectedAgent.agent.id] ?? []).filter((d) => d.id !== ded.id),
+                            }))}
+                            className="invisible size-4 shrink-0 text-muted-foreground/40 hover:text-destructive group-hover:visible"
+                            tabIndex={-1}
+                          >
+                            <X className="size-3" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  {/* TL/Radius can add more pre-split deductions */}
+                  {!isAgent && !isLocked && (
+                    <button
+                      onClick={() => setFeeDialogTiming("pre-split")}
+                      className="flex w-full items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-colors hover:bg-[#5A5FF2]/15"
+                      style={{ color: "#5A5FF2", backgroundColor: "rgb(90 95 242 / 0.08)" }}
+                    >
+                      <Plus className="size-3.5" />
+                      Pre-split deduction
+                    </button>
+                  )}
 
                   <Separator className="my-3" />
 
@@ -551,7 +672,7 @@ export function CommissionBreakdown() {
                       <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Split</p>
                       <p className="text-xs text-muted-foreground">0% of remaining balance</p>
                     </div>
-                    <EditableValue value={selectedAgent.split} onChange={(v) => setAgentField("split", v)} />
+                    <EditableValue value={selectedAgent.split} onChange={(v) => setAgentField("split", v)} readOnly={isAgent || isLocked} />
                   </div>
                   <Separator className="my-3" />
 
@@ -559,39 +680,52 @@ export function CommissionBreakdown() {
                   <div className="py-2">
                     <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Post-split deductions</p>
                   </div>
-                  {(postSplitDeductions[selectedAgent.agent.id] ?? []).map((ded) => (
-                    <div key={ded.id} className="group flex items-center justify-between py-1.5">
-                      <p className="text-xs text-muted-foreground">{ded.name}</p>
-                      <div className="flex items-center gap-2">
-                        <DeductionValue
-                          value={ded.amount}
-                          onChange={(v) => setPostSplitDeductions((prev) => ({
-                            ...prev,
-                            [selectedAgent.agent.id]: (prev[selectedAgent.agent.id] ?? []).map((d) => d.id === ded.id ? { ...d, amount: v } : d),
-                          }))}
-                        />
-                        <button
-                          onClick={() => setPostSplitDeductions((prev) => ({
-                            ...prev,
-                            [selectedAgent.agent.id]: (prev[selectedAgent.agent.id] ?? []).filter((d) => d.id !== ded.id),
-                          }))}
-                          className="invisible size-4 shrink-0 text-muted-foreground/40 hover:text-destructive group-hover:visible"
-                          tabIndex={-1}
-                        >
-                          <X className="size-3" />
-                        </button>
+                  {(postSplitDeductions[selectedAgent.agent.id] ?? []).map((ded) => {
+                    const dedReadOnly = isLocked || (ded.isRadiusFee && !canEditAll);
+                    const canDelete = !isLocked && (!ded.isRadiusFee || canEditAll);
+                    return (
+                      <div key={ded.id} className="group flex items-center justify-between py-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-xs text-muted-foreground">{ded.name}</p>
+                          {ded.isRadiusFee && <span className="rounded px-1 py-0 text-[10px] font-medium bg-muted text-muted-foreground">Radius</span>}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <DeductionValue
+                            value={ded.amount}
+                            readOnly={dedReadOnly}
+                            onChange={(v) => setPostSplitDeductions((prev) => ({
+                              ...prev,
+                              [selectedAgent.agent.id]: (prev[selectedAgent.agent.id] ?? []).map((d) => d.id === ded.id ? { ...d, amount: v } : d),
+                            }))}
+                          />
+                          {canDelete && (
+                            <button
+                              onClick={() => setPostSplitDeductions((prev) => ({
+                                ...prev,
+                                [selectedAgent.agent.id]: (prev[selectedAgent.agent.id] ?? []).filter((d) => d.id !== ded.id),
+                              }))}
+                              className="invisible size-4 shrink-0 text-muted-foreground/40 hover:text-destructive group-hover:visible"
+                              tabIndex={-1}
+                            >
+                              <X className="size-3" />
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
 
-                  <button
-                    onClick={() => setFeeDialogTiming("post-split")}
-                    className="mt-1 flex w-full items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-colors hover:bg-[#5A5FF2]/15"
-                    style={{ color: "#5A5FF2", backgroundColor: "rgb(90 95 242 / 0.08)" }}
-                  >
-                    <Plus className="size-3.5" />
-                    Post-split deduction
-                  </button>
+                  {/* Agents and TL/Radius can add post-split deductions */}
+                  {!isLocked && (
+                    <button
+                      onClick={() => setFeeDialogTiming("post-split")}
+                      className="mt-1 flex w-full items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-colors hover:bg-[#5A5FF2]/15"
+                      style={{ color: "#5A5FF2", backgroundColor: "rgb(90 95 242 / 0.08)" }}
+                    >
+                      <Plus className="size-3.5" />
+                      Post-split deduction
+                    </button>
+                  )}
 
                   <Separator className="my-3" />
 
@@ -634,14 +768,16 @@ export function CommissionBreakdown() {
                       <h2 className="text-sm font-semibold">{activeSide.title}</h2>
                       <p className="text-xs text-muted-foreground">{activeSide.subline}</p>
                     </div>
-                    <div className="flex shrink-0 items-center gap-1.5">
-                      <Button variant="outline" size="sm" className="h-7 gap-1.5 rounded-lg px-3 text-xs" style={{ color: "#5A5FF2", borderColor: "#5A5FF2" }}>
-                        <Pencil className="size-3" />Edit
-                      </Button>
-                      <Button variant="outline" size="sm" className="h-7 gap-1.5 rounded-lg px-3 text-xs" style={{ color: "#5A5FF2", borderColor: "#5A5FF2" }} onClick={() => setShowAwardDialog(true)}>
-                        <Sliders className="size-3" />Award allocation
-                      </Button>
-                    </div>
+                    {!isAgent && !isLocked && (
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <Button variant="outline" size="sm" className="h-7 gap-1.5 rounded-lg px-3 text-xs" style={{ color: "#5A5FF2", borderColor: "#5A5FF2" }}>
+                          <Pencil className="size-3" />Edit
+                        </Button>
+                        <Button variant="outline" size="sm" className="h-7 gap-1.5 rounded-lg px-3 text-xs" style={{ color: "#5A5FF2", borderColor: "#5A5FF2" }} onClick={() => setShowAwardDialog(true)}>
+                          <Sliders className="size-3" />Award allocation
+                        </Button>
+                      </div>
+                    )}
                   </div>
                   <div className="mt-3 grid grid-cols-3 gap-2">
                     {[
@@ -665,9 +801,17 @@ export function CommissionBreakdown() {
                     <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Gross Income</p>
                     <p className="text-base font-bold">{currency(grossIncome)}</p>
                   </div>
-                  <button onClick={() => setFeeDialogTiming("pre-split")} className="mt-2 flex w-full items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-colors hover:bg-[#5A5FF2]/15" style={{ color: "#5A5FF2", backgroundColor: "rgb(90 95 242 / 0.08)" }}>
-                    <Plus className="size-3.5" />Pre-commission deduction
-                  </button>
+                  {/* Agents: simplified Credits/Referral Fee dialog; TL/Radius: full fee builder */}
+                  {!isLocked && (
+                    <button
+                      onClick={() => isAgent ? setShowAgentPreSplitDialog(true) : setFeeDialogTiming("pre-split")}
+                      className="mt-2 flex w-full items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-colors hover:bg-[#5A5FF2]/15"
+                      style={{ color: "#5A5FF2", backgroundColor: "rgb(90 95 242 / 0.08)" }}
+                    >
+                      <Plus className="size-3.5" />
+                      {isAgent ? "Add credit or referral fee" : "Pre-commission deduction"}
+                    </button>
+                  )}
 
                   <Separator className="my-4" />
 
@@ -675,11 +819,13 @@ export function CommissionBreakdown() {
                     <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Agent Commissions</p>
                     <p className="text-base font-bold">{currency(totalAgentPayout)}</p>
                   </div>
-                  <div className="mt-2 flex flex-col gap-1.5">
-                    <button onClick={() => setFeeDialogTiming("post-split")} className="flex w-full items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-colors hover:bg-[#5A5FF2]/15" style={{ color: "#5A5FF2", backgroundColor: "rgb(90 95 242 / 0.08)" }}>
-                      <Plus className="size-3.5" />Post-commission deduction
-                    </button>
-                  </div>
+                  {!isAgent && !isLocked && (
+                    <div className="mt-2">
+                      <button onClick={() => setFeeDialogTiming("post-split")} className="flex w-full items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-colors hover:bg-[#5A5FF2]/15" style={{ color: "#5A5FF2", backgroundColor: "rgb(90 95 242 / 0.08)" }}>
+                        <Plus className="size-3.5" />Post-commission deduction
+                      </button>
+                    </div>
+                  )}
 
                   <Separator className="my-4" />
 
@@ -712,6 +858,114 @@ export function CommissionBreakdown() {
           </aside>
         </div>
       </main>
+
+      {/* Submit for approval */}
+      <AlertDialog open={showSubmitDialog} onOpenChange={setShowSubmitDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Submit for approval?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Your team lead will review this commission breakdown. You won't be able to edit it while it's pending.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction style={{ backgroundColor: "#5A5FF2" }} onClick={() => { setTxStatus("submitted"); setRejectionNote(""); setShowSubmitDialog(false); toast.success("Submitted for approval"); }}>
+              Submit
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Approve */}
+      <AlertDialog open={showApproveDialog} onOpenChange={setShowApproveDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Approve commission breakdown?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will finalize the breakdown. The agent will be notified and no further edits will be allowed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction style={{ backgroundColor: "#5A5FF2" }} onClick={() => { setTxStatus("approved"); setShowApproveDialog(false); toast.success("Breakdown approved"); }}>
+              Approve
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Return for edits */}
+      <Dialog open={showRejectDialog} onOpenChange={(open) => { setShowRejectDialog(open); if (!open) setRejectInput(""); }}>
+        <DialogContent className="gap-0 p-0 sm:max-w-md">
+          <DialogHeader className="border-b px-6 pb-4 pt-5">
+            <DialogTitle>Return for edits</DialogTitle>
+            <DialogDescription>Add a note explaining what needs to be changed.</DialogDescription>
+          </DialogHeader>
+          <div className="px-6 py-4">
+            <textarea
+              value={rejectInput}
+              onChange={(e) => setRejectInput(e.target.value)}
+              placeholder="e.g. Commission basis needs to reflect the updated gross…"
+              rows={4}
+              className="w-full resize-none rounded-md border bg-background px-3 py-2 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            />
+          </div>
+          <DialogFooter className="border-t px-6 py-4">
+            <Button variant="outline" onClick={() => setShowRejectDialog(false)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              disabled={!rejectInput.trim()}
+              onClick={() => { setTxStatus("draft"); setRejectionNote(rejectInput.trim()); setRejectInput(""); setShowRejectDialog(false); toast.warning("Returned to agent for edits"); }}
+            >
+              Return
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Agent: add credit or referral fee (gross pre-split) */}
+      <Dialog open={showAgentPreSplitDialog} onOpenChange={(open) => { setShowAgentPreSplitDialog(open); if (!open) { setAgentPreSplitLabel(""); setAgentPreSplitAmount(""); } }}>
+        <DialogContent className="gap-0 p-0 sm:max-w-sm">
+          <DialogHeader className="border-b px-6 pb-4 pt-5">
+            <DialogTitle>Add credit or referral fee</DialogTitle>
+            <DialogDescription>Enter a label and dollar amount to deduct from gross before split.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 px-6 py-4">
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground">Label</p>
+              <Input value={agentPreSplitLabel} onChange={(e) => setAgentPreSplitLabel(e.target.value)} placeholder="e.g. Referral fee" className="h-9" />
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground">Amount</p>
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                <Input value={agentPreSplitAmount} onChange={(e) => setAgentPreSplitAmount(e.target.value.replace(/[^0-9.]/g, ""))} placeholder="0" inputMode="decimal" className="h-9 pl-7" />
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="border-t px-6 py-4">
+            <Button variant="outline" onClick={() => setShowAgentPreSplitDialog(false)}>Cancel</Button>
+            <Button
+              disabled={!agentPreSplitLabel.trim() || !agentPreSplitAmount}
+              style={{ backgroundColor: "#5A5FF2" }}
+              onClick={() => {
+                const agentId = sidesData.flatMap(s => s.agents).find(a => a.id === selectedAgentId)?.id ?? selectedAgentId ?? "";
+                setPreSplitDeductions((prev) => ({
+                  ...prev,
+                  [agentId]: [...(prev[agentId] ?? []), { id: `pre-${Date.now()}`, name: agentPreSplitLabel.trim(), amount: Math.round(Number(agentPreSplitAmount)) }],
+                }));
+                toast.success(`"${agentPreSplitLabel}" added`);
+                setShowAgentPreSplitDialog(false);
+                setAgentPreSplitLabel("");
+                setAgentPreSplitAmount("");
+              }}
+            >
+              Add
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete confirmation */}
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
