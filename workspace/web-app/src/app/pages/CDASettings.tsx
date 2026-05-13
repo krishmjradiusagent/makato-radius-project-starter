@@ -1244,38 +1244,6 @@ function AssignDefaultsDialog({
 
         <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-6 py-5">
 
-          {/* Locked plan summary (Case 1) */}
-          {lockedPlan && (
-            <div className="flex flex-col gap-1.5 rounded-lg border bg-muted/40 px-4 py-3">
-              <div className="flex items-center gap-2">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Commission Plan</p>
-                <Badge variant="secondary" className="text-xs">Locked</Badge>
-              </div>
-              <p className="text-sm font-medium">{lockedPlan.name}</p>
-              <p className="text-xs text-muted-foreground">
-                {lockedPlan.type === "standard"
-                  ? `Agent ${lockedPlan.agentSplit}% / Team ${lockedPlan.teamSplit}% · Cap ${formatMoney(lockedPlan.capAmount)}`
-                  : `Tiered · ${lockedPlan.tiers.length} tiers`}
-              </p>
-            </div>
-          )}
-
-          {/* Locked fee summary (Case 2) */}
-          {lockedFee && (
-            <div className="flex flex-col gap-1.5 rounded-lg border bg-muted/40 px-4 py-3">
-              <div className="flex items-center gap-2">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Fee Type</p>
-                <Badge variant="secondary" className="text-xs">Locked</Badge>
-              </div>
-              <p className="text-sm font-medium">{lockedFee.name}</p>
-              <p className="text-xs text-muted-foreground">
-                {lockedFee.type === "flat" ? `$${lockedFee.amount} flat` : `${lockedFee.amount}%`}
-                {" · "}
-                {lockedFee.timing === "pre-split" ? "Pre-split" : "Post-split"}
-              </p>
-            </div>
-          )}
-
           {/* Locked agent summary (Case 3) */}
           {lockedAgent && (
             <div className="flex items-center gap-3 rounded-lg border bg-muted/40 px-4 py-3">
