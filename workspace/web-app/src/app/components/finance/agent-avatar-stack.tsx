@@ -114,15 +114,15 @@ export function AgentAvatarStack({
             )}
             {onUnassignDefaults && (
               <DropdownMenuItem
-                className="flex items-center gap-2 rounded-md"
+                className="flex items-center gap-2 rounded-md text-destructive focus:text-destructive"
                 onClick={(event) => {
                   event.stopPropagation();
                   onUnassignDefaults();
                 }}
-                aria-label="Unassign"
+                aria-label="Unassign all"
               >
-                <UserMinus className="size-4" />
-                <span>Unassign</span>
+                <UserMinus className="size-4 text-destructive" />
+                <span>Unassign all</span>
               </DropdownMenuItem>
             )}
           </DropdownMenuContent>
