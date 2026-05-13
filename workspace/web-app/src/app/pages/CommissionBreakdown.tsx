@@ -421,7 +421,7 @@ export function CommissionBreakdown() {
                 <Separator />
 
                 <div className="px-5 py-3 space-y-2">
-                  {side.agents.length > 0 ? side.agents.map((agent) => (
+                  {side.agents.map((agent) => (
                     <div
                       key={agent.id}
                       role="button" tabIndex={0}
@@ -449,12 +449,14 @@ export function CommissionBreakdown() {
                         <ChevronRight className="size-4 text-muted-foreground/50" />
                       </div>
                     </div>
-                  )) : (
-                    <div className="flex items-center gap-3 rounded-lg border border-dashed px-4 py-2.5">
-                      <p className="text-sm text-muted-foreground">No agent assigned</p>
-                      <span className="text-xs text-muted-foreground/60">— add to enable payout</span>
-                    </div>
-                  )}
+                  ))}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setAddAgentSideId(side.id); setAgentSearch(""); setPendingAgent(null); setAgentAllocations({}); setShowAddAgentDialog(true); }}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed px-4 py-2.5 text-xs font-medium transition-colors hover:bg-[#5A5FF2]/5"
+                    style={{ borderColor: "#5A5FF2", color: "#5A5FF2" }}
+                  >
+                    <Plus className="size-3.5" />Add agent
+                  </button>
                 </div>
               </Card>
             ))}
